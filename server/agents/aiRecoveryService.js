@@ -20,9 +20,9 @@ function sanitizeErrorMessage(error) {
 }
 export class AIRecoveryService {
     aiClient;
-    constructor() {
+    constructor(disableCloudApi = false) {
         const apiKey = process.env.GEMINI_API_KEY?.trim();
-        if (apiKey) {
+        if (apiKey && !disableCloudApi) {
             this.aiClient = new GoogleGenerativeAI(apiKey);
         }
     }

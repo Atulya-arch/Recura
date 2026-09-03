@@ -9,9 +9,9 @@ export class RecoveryEngine {
     provider;
     aiService;
     executor;
-    constructor(provider) {
+    constructor(provider, aiService) {
         this.provider = provider;
-        this.aiService = new AIRecoveryService();
+        this.aiService = aiService || new AIRecoveryService();
         this.executor = new RecoveryExecutor(provider);
     }
     /**

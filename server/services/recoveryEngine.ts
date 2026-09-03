@@ -12,8 +12,8 @@ export class RecoveryEngine {
   private aiService: AIRecoveryService;
   private executor: RecoveryExecutor;
 
-  constructor(private provider: PaymentProvider) {
-    this.aiService = new AIRecoveryService();
+  constructor(private provider: PaymentProvider, aiService?: AIRecoveryService) {
+    this.aiService = aiService || new AIRecoveryService();
     this.executor = new RecoveryExecutor(provider);
   }
 

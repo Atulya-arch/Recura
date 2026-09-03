@@ -30,9 +30,9 @@ function sanitizeErrorMessage(error: any): string {
 export class AIRecoveryService {
   private aiClient?: GoogleGenerativeAI;
 
-  constructor() {
+  constructor(disableCloudApi = false) {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
-    if (apiKey) {
+    if (apiKey && !disableCloudApi) {
       this.aiClient = new GoogleGenerativeAI(apiKey);
     }
   }

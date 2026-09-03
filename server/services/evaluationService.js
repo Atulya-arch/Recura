@@ -3,13 +3,21 @@ import { transactions, customers, policies } from '../db/schema.js';
 import { RecoveryEngine } from './recoveryEngine.js';
 import { SimulationPaymentProvider } from '../providers/simulationProvider.js';
 import { PolicyEngine } from '../policies/policyEngine.js';
+import { AIRecoveryService } from '../agents/aiRecoveryService.js';
 import { PaymentStatus } from '../../shared/enums.js';
 export class EvaluationService {
+    static cachedResults = null;
+    static lastEvaluatedAt = 0;
     /**
      * Runs Recura Recovery Workflow across all eligible failed transactions
      * and computes dynamic metrics against a standard single-retry baseline.
      */
-    static async runBatchEvaluation() {
+    static async runBatchEvaluation(forceRefresh = false) {
+        const now = Date.now();
+        // Use short-lived in-memory cache (15s) to guarantee sub-millisecond response times
+        if (!forceRefresh && this.cachedResults && now - this.lastEvaluatedAt < 15000) {
+            return this.cachedResults;
+        }
         const allTxs = await db.select().from(transactions);
         const allCusts = await db.select().from(customers);
         const custMap = new Map();
@@ -94,9 +102,9 @@ export class EvaluationService {
             }
         }
         const baselineRecoveryRate = revenueAtRiskMinor > 0 ? (baselineRecoveredMinor / revenueAtRiskMinor) * 100 : 0;
-        // 2. Run Recura AI Recovery Engine across all eligible cases
+        // 2. Run Recura AI Recovery Engine with fast deterministic evaluator for batch simulation
         const recuraProvider = new SimulationPaymentProvider();
-        const engine = new RecoveryEngine(recuraProvider);
+        const engine = new RecoveryEngine(recuraProvider, new AIRecoveryService(true));
         let recuraRecoveredMinor = 0;
         let recuraSuccessCount = 0;
         let interventionsCount = 0;
@@ -126,7 +134,7 @@ export class EvaluationService {
         const recuraRecoveryRate = revenueAtRiskMinor > 0 ? (recuraRecoveredMinor / revenueAtRiskMinor) * 100 : 0;
         const incrementalRevenueMinor = Math.max(0, recuraRecoveredMinor - baselineRecoveredMinor);
         const incrementalRatePercent = recuraRecoveryRate - baselineRecoveryRate;
-        return {
+        const results = {
             totalTransactions,
             failedTransactions,
             revenueAtRiskMinor,
@@ -148,5 +156,8 @@ export class EvaluationService {
             incrementalRevenueMinor,
             incrementalRatePercent: Number(incrementalRatePercent.toFixed(2))
         };
+        this.cachedResults = results;
+        this.lastEvaluatedAt = now;
+        return results;
     }
 }
