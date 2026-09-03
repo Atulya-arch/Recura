@@ -21,7 +21,7 @@ export const Sidebar: React.FC = () => {
             <Zap className="w-4 h-4 fill-current text-slate-950" />
           </div>
           <div className="flex items-center space-x-1.5">
-            <span className="text-2xl font-black tracking-tight text-white font-mono">recura</span>
+            <span className="text-2xl font-black tracking-tight text-white font-mono">Recura</span>
             <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-[#d4ff32] text-slate-950 uppercase tracking-widest">
               AI
             </span>
