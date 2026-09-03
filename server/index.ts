@@ -36,8 +36,15 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Serve frontend static build
-const distPath = path.resolve(process.cwd(), 'dist');
+// Locate and serve frontend static build directory
+const possibleDistPaths = [
+  path.resolve(process.cwd(), 'dist/client'),
+  path.resolve(process.cwd(), 'client/dist'),
+  path.resolve(process.cwd(), 'dist')
+];
+const distPath = possibleDistPaths.find(p => fs.existsSync(path.join(p, 'index.html'))) || possibleDistPaths[0];
+
+console.log(`📁 Serving frontend static files from: ${distPath}`);
 app.use(express.static(distPath));
 
 app.get('*', (req, res, next) => {
@@ -46,19 +53,20 @@ app.get('*', (req, res, next) => {
   }
   const indexPath = path.join(distPath, 'index.html');
   if (fs.existsSync(indexPath)) {
-    res.sendFile(indexPath);
-  } else {
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-        <head><title>Recura Server Running</title></head>
-        <body style="font-family: sans-serif; background: #0f172a; color: #fff; padding: 40px; text-align: center;">
-          <h2>⚡ Recura Backend API Server is Running on Port ${PORT}</h2>
-          <p>Frontend dist bundle is building or available at <a href="http://localhost:3000" style="color: #818cf8;">http://localhost:3000</a></p>
-        </body>
-      </html>
-    `);
+    return res.sendFile(indexPath);
   }
+  
+  // Fallback if index.html is truly missing
+  res.status(404).send(`
+    <!DOCTYPE html>
+    <html>
+      <head><title>Recura - Static Build Missing</title></head>
+      <body style="font-family: sans-serif; background: #0f172a; color: #fff; padding: 40px; text-align: center;">
+        <h2>⚡ Recura Server is Running on Port ${PORT}</h2>
+        <p>index.html not found at <code>${distPath}</code>. Please run <code>npm run build</code>.</p>
+      </body>
+    </html>
+  `);
 });
 
 async function startServer() {
