@@ -89,10 +89,13 @@ router.get('/transactions', async (req, res) => {
         createdAt: transactions.createdAt,
         updatedAt: transactions.updatedAt,
         customerName: customers.name,
-        customerEmail: customers.email
+        customerEmail: customers.email,
+        recoveryCaseId: recoveryCases.id,
+        recoveryStatus: recoveryCases.status
       })
       .from(transactions)
       .innerJoin(customers, eq(transactions.customerId, customers.id))
+      .leftJoin(recoveryCases, eq(transactions.id, recoveryCases.transactionId))
       .orderBy(desc(transactions.updatedAt), desc(transactions.createdAt))
       .limit(300);
 

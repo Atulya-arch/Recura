@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { FormatMoney } from '../components/FormatMoney';
 import { StatusBadge } from '../components/StatusBadge';
 import { fetchApi } from '../api/client';
-import { Search, Filter, RefreshCw } from 'lucide-react';
+import { Search, Filter, RefreshCw, ArrowRight, Zap } from 'lucide-react';
 
 export const TransactionsPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -39,16 +39,26 @@ export const TransactionsPage: React.FC = () => {
       t.customerEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (t.failureReason && t.failureReason.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchesStatus = statusFilter === 'ALL' || t.paymentStatus === statusFilter;
+    let matchesStatus = true;
+    if (statusFilter === 'FAILED') {
+      matchesStatus = t.paymentStatus === 'FAILED';
+    } else if (statusFilter === 'SUCCESS') {
+      matchesStatus = t.paymentStatus === 'SUCCESS';
+    } else if (statusFilter === 'ACTIVE_RECOVERY') {
+      matchesStatus = Boolean(t.recoveryStatus && !['RECOVERED', 'FAILED', 'STOPPED'].includes(t.recoveryStatus));
+    }
+
     return matchesSearch && matchesStatus;
   });
+
+  const activeRecoveryCount = txs.filter(t => t.recoveryStatus && !['RECOVERED', 'FAILED', 'STOPPED'].includes(t.recoveryStatus)).length;
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Transaction Work Queue</h1>
-          <p className="text-xs text-slate-500 font-medium mt-1">Search and filter merchant payment transactions and authorization logs.</p>
+          <p className="text-xs text-slate-500 font-medium mt-1">Search and filter merchant payment transactions, failure reasons, and AI recovery links.</p>
         </div>
         <button
           onClick={() => refetch()}
@@ -71,10 +81,10 @@ export const TransactionsPage: React.FC = () => {
             onChange={(e) => setStatusFilter(e.target.value)}
             className="bg-slate-50 border border-slate-200 rounded-full px-4 py-2 text-xs font-extrabold text-slate-800 focus:outline-none"
           >
-            <option value="ALL">All Payment Statuses</option>
-            <option value="FAILED">FAILED</option>
-            <option value="SUCCESS">SUCCESS</option>
-            <option value="PENDING">PENDING</option>
+            <option value="ALL">All Transactions ({txs.length})</option>
+            <option value="FAILED">Failed ({txs.filter(t => t.paymentStatus === 'FAILED').length})</option>
+            <option value="SUCCESS">Success ({txs.filter(t => t.paymentStatus === 'SUCCESS').length})</option>
+            <option value="ACTIVE_RECOVERY">Active in Recovery Queue ({activeRecoveryCount})</option>
           </select>
         </div>
 
@@ -108,6 +118,7 @@ export const TransactionsPage: React.FC = () => {
                 <th className="px-6 py-4">Amount</th>
                 <th className="px-6 py-4">Method</th>
                 <th className="px-6 py-4">Payment Status</th>
+                <th className="px-6 py-4">AI Recovery Queue</th>
                 <th className="px-6 py-4">Failure Reason</th>
                 <th className="px-6 py-4 text-center">Attempts</th>
               </tr>
@@ -127,6 +138,20 @@ export const TransactionsPage: React.FC = () => {
                   <td className="px-6 py-4">
                     <StatusBadge status={t.paymentStatus} />
                   </td>
+                  <td className="px-6 py-4">
+                    {t.recoveryCaseId ? (
+                      <Link
+                        to={`/recoveries/${t.recoveryCaseId}`}
+                        className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[10px] font-black bg-[#161618] hover:bg-black text-[#d4ff32] shadow-sm transition"
+                      >
+                        <Zap className="w-3 h-3" />
+                        <span>{t.recoveryStatus || 'ACTIVE'}</span>
+                        <ArrowRight className="w-2.5 h-2.5" />
+                      </Link>
+                    ) : (
+                      <span className="text-[11px] text-slate-400 font-medium">—</span>
+                    )}
+                  </td>
                   <td className="px-6 py-4 max-w-xs truncate font-medium text-slate-600">
                     {t.failureReason || 'N/A'}
                   </td>
@@ -137,7 +162,7 @@ export const TransactionsPage: React.FC = () => {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400 font-medium">
+                  <td colSpan={8} className="px-6 py-12 text-center text-slate-400 font-medium">
                     No transactions match the selected filter criteria.
                   </td>
                 </tr>
