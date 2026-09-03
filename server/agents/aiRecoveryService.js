@@ -49,7 +49,10 @@ export class AIRecoveryService {
         if (this.aiClient) {
             for (const modelName of SUPPORTED_GEMINI_MODELS) {
                 try {
-                    const model = this.aiClient.getGenerativeModel({ model: modelName });
+                    const model = this.aiClient.getGenerativeModel({
+                        model: modelName,
+                        generationConfig: { responseMimeType: 'application/json' }
+                    });
                     const response = await model.generateContent(`You are Recura's AI Revenue Recovery agent. Analyze the following failed payment/checkout transaction context and return ONLY a valid JSON object matching the required schema.
 
 Input Context:
@@ -95,7 +98,10 @@ Return ONLY raw JSON, no markdown fences.`);
         if (this.aiClient) {
             for (const modelName of SUPPORTED_GEMINI_MODELS) {
                 try {
-                    const model = this.aiClient.getGenerativeModel({ model: modelName });
+                    const model = this.aiClient.getGenerativeModel({
+                        model: modelName,
+                        generationConfig: { responseMimeType: 'application/json' }
+                    });
                     const prompt = `You are Recura's Promise-to-Pay (PTP) NLP parser for Indian merchant checkout recovery.
 Base Today Date: ${baseDate.toISOString()}
 Customer Reply: "${customerReply}"
