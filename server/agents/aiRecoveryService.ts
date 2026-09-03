@@ -9,11 +9,29 @@ export interface CustomerHistory {
   previousRecoverySuccesses: number;
 }
 
+// Supported modern Gemini generation models in order of capability and efficiency
+const SUPPORTED_GEMINI_MODELS = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-1.5-flash'
+];
+
+/**
+ * Sanitizes error messages to guarantee no API keys or sensitive credentials are ever logged.
+ */
+function sanitizeErrorMessage(error: any): string {
+  if (!error) return 'Unknown error';
+  const msg = typeof error.message === 'string' ? error.message : String(error);
+  // Strip API keys or query params matching key=... or credentials
+  return msg.replace(/key=[a-zA-Z0-9_\-]+/gi, 'key=[REDACTED]').replace(/AIza[0-9A-Za-z-_]{35}/g, '[REDACTED_API_KEY]');
+}
+
 export class AIRecoveryService {
   private aiClient?: GoogleGenerativeAI;
 
   constructor() {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (apiKey) {
       this.aiClient = new GoogleGenerativeAI(apiKey);
     }
@@ -43,10 +61,9 @@ export class AIRecoveryService {
       allowedCategories: Object.values(FailureCategory)
     };
 
-    // If Gemini API key is available, attempt LLM call
+    // If Gemini API client is initialized, attempt LLM call across supported models
     if (this.aiClient) {
-      const candidateModels = ['gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash', 'gemini-pro'];
-      for (const modelName of candidateModels) {
+      for (const modelName of SUPPORTED_GEMINI_MODELS) {
         try {
           const model = this.aiClient.getGenerativeModel({ model: modelName });
           const response = await model.generateContent(
@@ -76,9 +93,10 @@ Return ONLY raw JSON, no markdown fences.`
             return { decision: validated.data, aiFailed: false };
           }
         } catch (err: any) {
-          // If 404 on model name, try next candidate model
-          if (modelName === candidateModels[candidateModels.length - 1]) {
-            console.warn('Gemini API call timed out or failed across candidate models, falling back to local deterministic AI heuristic:', err.message);
+          const safeMsg = sanitizeErrorMessage(err);
+          // Only log fallback on the final candidate failure
+          if (modelName === SUPPORTED_GEMINI_MODELS[SUPPORTED_GEMINI_MODELS.length - 1]) {
+            console.warn(`[AI] Gemini API unavailable (${safeMsg}). Gracefully falling back to local deterministic AI heuristic.`);
           }
         }
       }
@@ -101,10 +119,9 @@ Return ONLY raw JSON, no markdown fences.`
   ): Promise<PromiseToPayExtraction> {
     const text = customerReply.trim().toLowerCase();
 
-    // If Gemini client is active, attempt intelligent LLM parsing
+    // If Gemini client is active, attempt intelligent LLM parsing across supported models
     if (this.aiClient) {
-      const candidateModels = ['gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash', 'gemini-pro'];
-      for (const modelName of candidateModels) {
+      for (const modelName of SUPPORTED_GEMINI_MODELS) {
         try {
           const model = this.aiClient.getGenerativeModel({ model: modelName });
           const prompt = `You are Recura's Promise-to-Pay (PTP) NLP parser for Indian merchant checkout recovery.
@@ -130,8 +147,11 @@ Return ONLY raw JSON matching this schema.`;
           if (validated.success) {
             return validated.data;
           }
-        } catch (err) {
-          // Try next model
+        } catch (err: any) {
+          const safeMsg = sanitizeErrorMessage(err);
+          if (modelName === SUPPORTED_GEMINI_MODELS[SUPPORTED_GEMINI_MODELS.length - 1]) {
+            console.warn(`[AI] Gemini PTP extraction fallback to heuristic engine: ${safeMsg}`);
+          }
         }
       }
     }
@@ -146,81 +166,107 @@ Return ONLY raw JSON matching this schema.`;
     amountFormatted: string,
     baseDate: Date
   ): PromiseToPayExtraction {
-    // 1. Cancel intent
-    if (text.includes('cancel') || text.includes('nahi chahiye') || text.includes('mat bhejo')) {
+    const firstName = customerName.split(' ')[0] || 'Customer';
+
+    // 1. Ready to Pay / Immediate Payment Link Intent
+    if (
+      text.includes('abhi') ||
+      text.includes('instant') ||
+      text.includes('ready') ||
+      text.includes('now') ||
+      text.includes('link bhej') ||
+      text.includes('link send') ||
+      text.includes('upi id') ||
+      text.includes('qr')
+    ) {
+      return {
+        customerIntent: CustomerIntent.READY_NOW,
+        promiseDate: null,
+        daysDeferred: 0,
+        confidence: 0.95,
+        summary: 'Customer requested instant payment link to complete transaction now.',
+        hinglishReply: `Ji ${firstName} ji! Humne aapko instant payment link WhatsApp aur SMS par send kar diya hai: https://pay.recura.in/ord_${Math.random().toString(36).substring(2, 6)}`
+      };
+    }
+
+    // 2. Cancellation Intent
+    if (
+      text.includes('cancel') ||
+      text.includes('nahi chahiye') ||
+      text.includes('don\'t need') ||
+      text.includes('stop') ||
+      text.includes('mat bhejo') ||
+      text.includes('nahi lena')
+    ) {
       return {
         customerIntent: CustomerIntent.CANCEL_ORDER,
         promiseDate: null,
         daysDeferred: 0,
-        confidence: 0.95,
-        summary: 'Customer requested order cancellation.',
-        hinglishReply: `Ji ${customerName}, aapka order cancel kar diya gaya hai. Aage kisi bhi help ke liye batayein.`
-      };
-    }
-
-    // 2. Ready now intent
-    if (text.includes('abhi') || text.includes('now') || text.includes('link bhej') || text.includes('ready')) {
-      return {
-        customerIntent: CustomerIntent.READY_NOW,
-        promiseDate: baseDate.toISOString(),
-        daysDeferred: 0,
         confidence: 0.92,
-        summary: 'Customer is ready to pay immediately via payment link.',
-        hinglishReply: `Dhanyawad ${customerName}! Yeh raha aapka instant secure payment link: https://pay.recura.ai/checkout/${Date.now().toString(36)}`
+        summary: 'Customer requested order cancellation.',
+        hinglishReply: `Theek hai ${firstName} ji, humne aapka order safe cancellation queue me daal diya hai. Koi further charges nahi honge.`
       };
     }
 
-    // 3. Date / Salary / Specific day detection
-    let daysDeferred = 3;
-    let specificDateStr = '';
+    // 3. Dispute / Fraud Intent
+    if (
+      text.includes('fraud') ||
+      text.includes('cheat') ||
+      text.includes('scam') ||
+      text.includes('complaint') ||
+      text.includes('police') ||
+      text.includes('wrong order')
+    ) {
+      return {
+        customerIntent: CustomerIntent.DISPUTE,
+        promiseDate: null,
+        daysDeferred: 0,
+        confidence: 0.90,
+        summary: 'Customer raised payment dispute / complaint.',
+        hinglishReply: `Namaste ${firstName} ji, aapki complaint note kar li gayi hai. Hamare senior relationship executive aapko 15 minutes me call karenge.`
+      };
+    }
 
-    // Check specific day numbers: e.g. "7th", "7 tareekh", "10 ko", "5th ko", "1st"
-    const dayMatch = text.match(/(\d{1,2})\s*(?:st|nd|rd|th|tareekh|tarikh|ko|\/|-)/i) || text.match(/(?:on\s*)(\d{1,2})/i);
-    if (dayMatch) {
-      const targetDay = parseInt(dayMatch[1], 10);
-      if (targetDay >= 1 && targetDay <= 31) {
-        const promise = new Date(baseDate);
-        if (targetDay > baseDate.getDate()) {
-          promise.setDate(targetDay);
-        } else {
-          promise.setMonth(promise.getMonth() + 1);
-          promise.setDate(targetDay);
-        }
-        daysDeferred = Math.max(1, Math.round((promise.getTime() - baseDate.getTime()) / (1000 * 60 * 60 * 24)));
-        specificDateStr = promise.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+    // 4. Promise-To-Pay: Date commitments (Salary, specific dates, tomorrow, weekend)
+    let daysToAdd = 3; // Default 3 days for general salary commitments
+    let dateFound = false;
 
-        return {
-          customerIntent: CustomerIntent.PAY_LATER,
-          promiseDate: promise.toISOString(),
-          daysDeferred: Math.min(30, daysDeferred),
-          confidence: 0.94,
-          summary: `Customer committed Promise-to-Pay on ${specificDateStr} (salary/funds credit).`,
-          hinglishReply: `Shukriya ${customerName}! Humne aapka ${amountFormatted} ka payment ${specificDateStr} ke liye guard karke schedule kar diya hai.`
-        };
+    // Check for specific date (e.g., "7th ko", "10 ko", "1st tarikh")
+    const dateMatch = text.match(/(\d{1,2})(?:st|nd|rd|th)?\s*(?:ko|tarikh|date|taarikh)?/i);
+    if (dateMatch && Number(dateMatch[1]) >= 1 && Number(dateMatch[1]) <= 31) {
+      const targetDay = Number(dateMatch[1]);
+      const currentDay = baseDate.getDate();
+      if (targetDay > currentDay) {
+        daysToAdd = targetDay - currentDay;
+      } else {
+        // Next month
+        daysToAdd = (30 - currentDay) + targetDay;
       }
+      dateFound = true;
+    } else if (text.includes('kal') || text.includes('tomorrow')) {
+      daysToAdd = 1;
+      dateFound = true;
+    } else if (text.includes('parso') || text.includes('day after')) {
+      daysToAdd = 2;
+      dateFound = true;
+    } else if (text.includes('weekend') || text.includes('sunday') || text.includes('saturday')) {
+      daysToAdd = 4;
+      dateFound = true;
+    } else if (text.includes('salary') || text.includes('mahine') || text.includes('next week') || text.includes('paise')) {
+      daysToAdd = 5;
+      dateFound = true;
     }
 
-    // Check relative day terms: "kal" (tomorrow), "parso" (in 2 days), "salary", "next week"
-    if (text.includes('kal') || text.includes('tomorrow')) {
-      daysDeferred = 1;
-    } else if (text.includes('parso') || text.includes('in 2 days')) {
-      daysDeferred = 2;
-    } else if (text.includes('salary') || text.includes('month end')) {
-      daysDeferred = 4;
-    } else if (text.includes('next week') || text.includes('agle hafte')) {
-      daysDeferred = 7;
-    }
-
-    const scheduledDate = new Date(baseDate.getTime() + daysDeferred * 24 * 60 * 60 * 1000);
-    const dateFormatted = scheduledDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+    const promiseDate = new Date(baseDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+    const formattedDate = promiseDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
 
     return {
       customerIntent: CustomerIntent.PAY_LATER,
-      promiseDate: scheduledDate.toISOString(),
-      daysDeferred,
-      confidence: 0.89,
-      summary: `Customer committed Promise-to-Pay on ${dateFormatted} (${daysDeferred} days deferred).`,
-      hinglishReply: `Shukriya ${customerName}! Humne aapka ${amountFormatted} ka payment ${dateFormatted} ke liye schedule kar diya hai. Tab tak aapka cart locked rahega.`
+      promiseDate: promiseDate.toISOString(),
+      daysDeferred: daysToAdd,
+      confidence: dateFound ? 0.94 : 0.78,
+      summary: `Customer committed to pay on ${formattedDate} (${daysToAdd} days deferral).`,
+      hinglishReply: `Shukriya ${firstName} ji! Humne aapka ${amountFormatted} ka order hold par rakh diya hai aur automatic retry ${formattedDate} ke liye schedule kar diya hai. Tab tak aapka cart safe hai! 🙏`
     };
   }
 
@@ -230,71 +276,84 @@ Return ONLY raw JSON matching this schema.`;
     history: CustomerHistory
   ): AiDecisionInput {
     const reason = (transaction.failureReason || '').toLowerCase();
-    const amountInr = `₹${(transaction.amountMinor / 100).toLocaleString('en-IN')}`;
+    const isHighValue = transaction.amountMinor > 100000; // > ₹1,000
+    const firstName = customer.name.split(' ')[0] || 'Customer';
+    const amountStr = `₹${(transaction.amountMinor / 100).toLocaleString('en-IN')}`;
 
-    if (transaction.checkoutStatus === 'ABANDONED') {
+    // 1. Gateway Network Timeout
+    if (reason.includes('timeout') || reason.includes('network') || reason.includes('gateway')) {
       return {
-        diagnosis: 'Customer abandoned checkout flow prior to authorization',
-        failureCategory: FailureCategory.ABANDONMENT,
-        recommendedAction: RecoveryActionType.REMINDER,
-        confidence: 0.88,
-        rationale: 'Customer left checkout before completing payment. Sending a friendly reminder with direct checkout link.',
-        customerMessage: `Hi ${customer.name}, your order #${transaction.orderId} is saved! Complete your checkout securely using your payment link.`,
-        hinglishScript: `Namaste ${customer.name} ji! Acme Retail par aapka order #${transaction.orderId} hold par hai. Aap yahan click karke payment complete kar sakte hain.`
-      };
-    }
-
-    if (reason.includes('network') || reason.includes('timeout') || reason.includes('gateway')) {
-      return {
-        diagnosis: 'Transient gateway or network communication timeout',
+        diagnosis: 'Transient gateway network timeout during payment gateway authorization handshake.',
         failureCategory: FailureCategory.NETWORK_FAILURE,
         recommendedAction: RecoveryActionType.IMMEDIATE_RETRY,
         confidence: 0.92,
-        rationale: 'Network timeout detected during authorization. Customer history shows high past success; immediate retry recommended.',
-        hinglishScript: `Namaste ${customer.name} ji! Bank server timeout ki wajah se aapka ${amountInr} ka payment ruk gaya tha. Humne instant secure retry schedule kar diya hai.`
+        rationale: 'Network timeouts represent temporary connection drops with 90%+ recovery probability on immediate idempotent retry.',
+        customerMessage: `Your payment of ${amountStr} experienced a temporary bank timeout. We are safely verifying the transaction state.`,
+        hinglishScript: `Namaste ${firstName} ji! Acme Retail par aapka ${amountStr} ka payment bank network issue ki wajah se pause ho gaya tha. Hum turant ise verify kar rahe hain.`
       };
     }
 
-    if (reason.includes('insufficient') || reason.includes('funds') || reason.includes('balance')) {
+    // 2. Insufficient Funds / Credit Limit
+    if (reason.includes('balance') || reason.includes('insufficient') || reason.includes('limit')) {
       return {
-        diagnosis: 'Insufficient balance or limit reached on customer account',
+        diagnosis: 'Customer account balance or card daily transaction limit exceeded at issuer bank.',
         failureCategory: FailureCategory.INSUFFICIENT_FUNDS,
         recommendedAction: RecoveryActionType.DELAYED_RETRY,
-        confidence: 0.81,
-        rationale: 'Insufficient funds reported. A delayed retry allows time for account replenishment or salary cycle credit.',
-        hinglishScript: `Namaste ${customer.name} ji! Aapka ${amountInr} ka order pending hai. Agar aap chahein toh hum payment retry aapke salary date ya committed date par schedule kar sakte hain.`
+        confidence: 0.85,
+        rationale: 'Balance declines recover effectively when retried after customer tops up or at the next business settlement window.',
+        customerMessage: `Your transaction of ${amountStr} was declined due to bank limits. We will automatically retry tomorrow, or you can use an alternate payment method.`,
+        hinglishScript: `Namaste ${firstName} ji! Acme Retail par aapke order ka payment complete nahi ho paya. Kya hum kal shaam ko dobara retry karein ya aap alternate UPI link chahenge?`
       };
     }
 
-    if (reason.includes('bank') || reason.includes('issuer') || reason.includes('decline')) {
+    // 3. Bank Server Down
+    if (reason.includes('bank') || reason.includes('issuer') || reason.includes('unavailable') || reason.includes('downtime')) {
       return {
-        diagnosis: 'Bank/Issuer system failure or temporary decline',
+        diagnosis: 'Issuer bank authentication core banking switch temporarily unavailable.',
         failureCategory: FailureCategory.BANK_FAILURE,
         recommendedAction: RecoveryActionType.DELAYED_RETRY,
-        confidence: 0.76,
-        rationale: 'Issuer decline experienced. Delayed retry recommended to avoid consecutive bank fraud flags.',
-        hinglishScript: `Namaste ${customer.name} ji! Card issuing bank ke temporary network issue ki wajah se payment decline hua. Humne safe window retry queue me add kiya hai.`
+        confidence: 0.88,
+        rationale: 'Bank switch outages typically clear within 2-4 hours. Scheduling a delayed retry maximizes successful settlement.',
+        customerMessage: `Your bank is currently experiencing maintenance. We will automatically retry your payment of ${amountStr} in a few hours.`,
+        hinglishScript: `Namaste ${firstName} ji! Aapke bank ka server temporarily down chal raha hai. Aapka cart reserved hai, hum 2 ghante baad auto-retry karenge.`
       };
     }
 
-    if (transaction.attemptCount >= 3 || history.previousFailures > 4) {
+    // 4. Checkout Abandonment
+    if (transaction.checkoutStatus === 'ABANDONED' || reason.includes('abandoned')) {
       return {
-        diagnosis: 'Repeated transaction failures exceeding automated recovery safety profile',
-        failureCategory: FailureCategory.UNKNOWN,
-        recommendedAction: RecoveryActionType.ESCALATE,
-        confidence: 0.85,
-        rationale: 'Multiple retries failed without success. Escalating to merchant support team for manual intervention.',
-        hinglishScript: `Namaste ${customer.name} ji! Humare support manager aapse directly connect karenge taaki aapka order smoothly complete ho sake.`
+        diagnosis: 'Customer abandoned checkout at 3DS or payment method selection step.',
+        failureCategory: FailureCategory.ABANDONMENT,
+        recommendedAction: RecoveryActionType.REMINDER,
+        confidence: 0.78,
+        rationale: 'Abandoned checkouts benefit from a low-friction reminder with a 1-click payment link before order expiry.',
+        customerMessage: `We saved the items in your cart (${amountStr})! Complete your checkout in 1-click before items run out of stock.`,
+        hinglishScript: `Namaste ${firstName} ji! Aapka ${amountStr} ka cart Acme Retail par wait kar raha hai. 1-click me order complete karne ke liye humne link bheja hai!`
       };
     }
 
+    // 5. Permanent Failure / Exhausted Retries
+    if (reason.includes('expired') || reason.includes('invalid') || transaction.attemptCount >= 3) {
+      return {
+        diagnosis: 'Permanent card decline or maximum automated recovery retries exhausted.',
+        failureCategory: FailureCategory.TRANSIENT,
+        recommendedAction: RecoveryActionType.ESCALATE,
+        confidence: 0.95,
+        rationale: 'Permanent failures cannot be resolved through automated retries. Escalating to human customer success to assist buyer.',
+        customerMessage: `We could not process payment for order #${transaction.orderId}. A support specialist has been assigned to help you.`,
+        hinglishScript: `Namaste ${firstName} ji! Acme Retail par aapka order #${transaction.orderId} hold par hai. Hamara customer care team aapki madad ke liye turant sampark karega.`
+      };
+    }
+
+    // Default Fallback: Intelligent Retry
     return {
-      diagnosis: 'Temporary card or payment channel authorization error',
+      diagnosis: 'Intermittent transaction authorization failure detected.',
       failureCategory: FailureCategory.TRANSIENT,
       recommendedAction: RecoveryActionType.IMMEDIATE_RETRY,
-      confidence: 0.78,
-      rationale: 'Transient authorization error on standard payment channel. Immediate single retry recommended.',
-      hinglishScript: `Namaste ${customer.name} ji! Temporary authorization error aaya tha. Recura Autopilot safe auto-retry perform kar raha hai.`
+      confidence: 0.82,
+      rationale: 'Transient payment errors often clear on subsequent idempotent retry attempts.',
+      customerMessage: `We encountered an issue processing your ${amountStr} payment. We are retrying automatically.`,
+      hinglishScript: `Namaste ${firstName} ji! Acme Retail par aapke order ka payment process ho raha hai. Cart bilkul safe hai.`
     };
   }
 }
