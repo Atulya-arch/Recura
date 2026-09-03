@@ -3,9 +3,9 @@ import { AiDecisionSchema, PromiseToPayExtractionSchema } from '../../shared/sch
 import { FailureCategory, RecoveryActionType, CustomerIntent } from '../../shared/enums.js';
 // Supported modern Gemini generation models in order of capability and efficiency
 const SUPPORTED_GEMINI_MODELS = [
+    'gemini-3.6-flash',
     'gemini-2.5-flash',
     'gemini-2.0-flash',
-    'gemini-2.5-flash-lite',
     'gemini-1.5-flash'
 ];
 /**
