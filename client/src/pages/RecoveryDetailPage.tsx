@@ -85,15 +85,59 @@ export const RecoveryDetailPage: React.FC = () => {
 
   const playVoiceSimulation = () => {
     setIsPlayingAudio(true);
-    // Use Web Speech API if available for real audible speech synthesis!
-    if ('speechSynthesis' in window && ai?.hinglishScript) {
+
+    const scriptText =
+      ai?.hinglishScript ||
+      `Namaste ${cust?.name || 'Customer'} ji! Acme Retail par aapka order #${tx?.orderId || '50001'} ka payment bank timeout ki wajah se pending hai. Humne aapke cart ko safe rakha hai. Kya hum payment retry aapke salary date par schedule karein?`;
+
+    // 1. Play pleasant soft chime sound via Web Audio API
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContext) {
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+        osc.frequency.setValueAtTime(880.0, ctx.currentTime + 0.12); // A5
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.35);
+      }
+    } catch (e) {
+      console.warn('AudioContext chime not available', e);
+    }
+
+    // 2. Speak using Web Speech API
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(ai.hinglishScript);
+      window.speechSynthesis.resume();
+
+      const utterance = new SpeechSynthesisUtterance(scriptText);
+      utterance.volume = 1.0;
       utterance.rate = 0.95;
-      utterance.pitch = 1.05;
+      utterance.pitch = 1.0;
+
+      // Select Indian English / Hindi voice if available
+      const voices = window.speechSynthesis.getVoices();
+      const inVoice = voices.find((v) => v.lang.includes('hi') || v.lang.includes('IN') || v.name.includes('India'));
+      if (inVoice) {
+        utterance.voice = inVoice;
+      }
+
       utterance.onend = () => setIsPlayingAudio(false);
-      utterance.onerror = () => setIsPlayingAudio(false);
-      window.speechSynthesis.speak(utterance);
+      utterance.onerror = (e) => {
+        console.error('SpeechSynthesis error:', e);
+        setIsPlayingAudio(false);
+      };
+
+      // Small delay after chime
+      setTimeout(() => {
+        window.speechSynthesis.speak(utterance);
+      }, 200);
     } else {
       setTimeout(() => setIsPlayingAudio(false), 4000);
     }
