@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { Sidebar } from './components/Sidebar';
-import { NotificationsPopover } from './components/NotificationsPopover';
 import { DashboardPage } from './pages/DashboardPage';
 import { TransactionsPage } from './pages/TransactionsPage';
 import { RecoveryQueuePage } from './pages/RecoveryQueuePage';
@@ -62,9 +61,6 @@ export const App: React.FC = () => {
               <Calendar className="w-3.5 h-3.5 text-slate-500" />
               <span>{currentDate}</span>
             </div>
-
-            {/* Live Interactive Notifications Popover */}
-            <NotificationsPopover />
           </div>
         </header>
 
