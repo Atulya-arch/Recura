@@ -10,7 +10,7 @@ export const AuditTrailPage: React.FC = () => {
   const { data: logs, isLoading, refetch } = useQuery<any[]>({
     queryKey: ['audit-logs'],
     queryFn: () => fetchApi<any[]>('/api/audit'),
-    refetchInterval: 5000
+    refetchInterval: 3000
   });
 
   if (isLoading || !logs) {
@@ -22,7 +22,7 @@ export const AuditTrailPage: React.FC = () => {
   }
 
   const filtered = logs.filter((l) => {
-    const metaStr = l.metadata ? JSON.stringify(l.metadata).toLowerCase() : '';
+    const metaStr = l.metadata ? (typeof l.metadata === 'string' ? l.metadata : JSON.stringify(l.metadata)).toLowerCase() : '';
     const matchesSearch =
       l.eventType.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (l.recoveryCaseId && l.recoveryCaseId.toLowerCase().includes(searchTerm.toLowerCase())) ||

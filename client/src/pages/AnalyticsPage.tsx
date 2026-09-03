@@ -9,7 +9,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 export const AnalyticsPage: React.FC = () => {
   const { data: evalRes, isLoading, refetch } = useQuery<EvaluationResults>({
     queryKey: ['analytics-evaluation'],
-    queryFn: () => fetchApi<EvaluationResults>('/api/analytics')
+    queryFn: () => fetchApi<EvaluationResults>('/api/analytics'),
+    refetchInterval: 10000
   });
 
   if (isLoading || !evalRes) {

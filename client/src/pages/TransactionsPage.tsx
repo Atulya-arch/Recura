@@ -18,9 +18,10 @@ export const TransactionsPage: React.FC = () => {
     }
   }, [searchParams]);
 
-  const { data: txs, isLoading } = useQuery<any[]>({
+  const { data: txs, isLoading, refetch } = useQuery<any[]>({
     queryKey: ['transactions'],
-    queryFn: () => fetchApi<any[]>('/api/transactions')
+    queryFn: () => fetchApi<any[]>('/api/transactions'),
+    refetchInterval: 3000
   });
 
   if (isLoading || !txs) {
@@ -49,6 +50,13 @@ export const TransactionsPage: React.FC = () => {
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Transaction Work Queue</h1>
           <p className="text-xs text-slate-500 font-medium mt-1">Search and filter merchant payment transactions and authorization logs.</p>
         </div>
+        <button
+          onClick={() => refetch()}
+          className="flex items-center space-x-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-900 text-xs font-black rounded-full border border-slate-200 shadow-sm transition"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          <span>Refresh Transactions</span>
+        </button>
       </div>
 
       {/* Filter Controls */}

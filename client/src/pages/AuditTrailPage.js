@@ -9,13 +9,13 @@ export const AuditTrailPage = () => {
     const { data: logs, isLoading, refetch } = useQuery({
         queryKey: ['audit-logs'],
         queryFn: () => fetchApi('/api/audit'),
-        refetchInterval: 5000
+        refetchInterval: 3000
     });
     if (isLoading || !logs) {
         return (_jsx("div", { className: "flex items-center justify-center min-h-[60vh]", children: _jsx(RefreshCw, { className: "w-8 h-8 text-[#161618] animate-spin" }) }));
     }
     const filtered = logs.filter((l) => {
-        const metaStr = l.metadata ? JSON.stringify(l.metadata).toLowerCase() : '';
+        const metaStr = l.metadata ? (typeof l.metadata === 'string' ? l.metadata : JSON.stringify(l.metadata)).toLowerCase() : '';
         const matchesSearch = l.eventType.toLowerCase().includes(searchTerm.toLowerCase()) ||
             (l.recoveryCaseId && l.recoveryCaseId.toLowerCase().includes(searchTerm.toLowerCase())) ||
             metaStr.includes(searchTerm.toLowerCase());

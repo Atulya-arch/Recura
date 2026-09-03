@@ -87,12 +87,13 @@ router.get('/transactions', async (req, res) => {
         checkoutStatus: transactions.checkoutStatus,
         attemptCount: transactions.attemptCount,
         createdAt: transactions.createdAt,
+        updatedAt: transactions.updatedAt,
         customerName: customers.name,
         customerEmail: customers.email
       })
       .from(transactions)
       .innerJoin(customers, eq(transactions.customerId, customers.id))
-      .orderBy(desc(transactions.createdAt))
+      .orderBy(desc(transactions.updatedAt), desc(transactions.createdAt))
       .limit(300);
 
     res.json(list);

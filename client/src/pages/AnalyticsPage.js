@@ -7,7 +7,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 export const AnalyticsPage = () => {
     const { data: evalRes, isLoading, refetch } = useQuery({
         queryKey: ['analytics-evaluation'],
-        queryFn: () => fetchApi('/api/analytics')
+        queryFn: () => fetchApi('/api/analytics'),
+        refetchInterval: 10000
     });
     if (isLoading || !evalRes) {
         return (_jsx("div", { className: "flex items-center justify-center min-h-[60vh]", children: _jsx(RefreshCw, { className: "w-8 h-8 text-[#161618] animate-spin" }) }));
