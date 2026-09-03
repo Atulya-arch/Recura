@@ -152,9 +152,3 @@ Recura is packaged as a zero-dependency self-contained monolith (Express backend
    - `GEMINI_API_KEY`: *(Your Google Gemini API Key)*
 
 *(No PostgreSQL database service or Razorpay account needed — PGlite and Simulation Provider run seamlessly out of the box).*
-
----
-
-## 8. License
-
-MIT License. Built for the Google AI Hackathon.
