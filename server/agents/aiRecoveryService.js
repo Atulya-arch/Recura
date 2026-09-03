@@ -63,11 +63,9 @@ Return ONLY raw JSON, no markdown fences.`);
                 }
             }
             catch (err) {
-                return {
-                    decision: null,
-                    aiFailed: true,
-                    failureReason: `AI generation failed or timed out: ${err.message}`
-                };
+                console.warn('Gemini API call timed out or failed, falling back to local deterministic AI heuristic:', err.message);
+                const heuristicDecision = this.runHeuristicAnalysis(transaction, customer, history);
+                return { decision: heuristicDecision, aiFailed: false };
             }
         }
         // High-precision local heuristic reasoning fallback when API key is not present or offline

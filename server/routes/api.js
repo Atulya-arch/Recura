@@ -5,6 +5,7 @@ import { eq, desc } from 'drizzle-orm';
 import { SimulationPaymentProvider } from '../providers/simulationProvider.js';
 import { RecoveryEngine } from '../services/recoveryEngine.js';
 import { EvaluationService } from '../services/evaluationService.js';
+import { AIRecoveryService } from '../agents/aiRecoveryService.js';
 import { UpdatePolicySchema, RunDemoScenarioSchema } from '../../shared/schemas.js';
 import { RecoveryStatus, PaymentStatus } from '../../shared/enums.js';
 export const router = Router();
@@ -27,12 +28,14 @@ router.get('/dashboard/metrics', async (req, res) => {
         const recoveryRatePercent = revenueAtRiskMinor > 0 ? Number(((recoveredRevenueMinor / revenueAtRiskMinor) * 100).toFixed(1)) : 0;
         const baselineRecovered = Math.round(recoveredRevenueMinor * 0.65); // Standard baseline estimate
         const incrementalRecoveryMinor = Math.max(0, recoveredRevenueMinor - baselineRecovered);
-        const activeRecoveriesCount = allCases.filter(c => ['DETECTED', 'DIAGNOSING', 'PLANNED', 'POLICY_CHECK', 'READY', 'EXECUTING', 'VERIFYING', 'RETRY_SCHEDULED'].includes(c.status)).length;
+        const activeRecoveriesCount = allCases.filter(c => ['DETECTED', 'DIAGNOSING', 'PLANNED', 'POLICY_CHECK', 'READY', 'EXECUTING', 'VERIFYING', 'RETRY_SCHEDULED', 'PROMISE_TO_PAY'].includes(c.status)).length;
+        const ptpCount = allCases.filter(c => c.status === 'PROMISE_TO_PAY').length;
         const stoppedSafelyCount = allCases.filter(c => c.status === 'STOPPED').length;
         const escalationsCount = allCases.filter(c => c.status === 'ESCALATED').length;
         const outcomeDistribution = {
             Recovered: allCases.filter(c => c.status === 'RECOVERED').length,
-            Pending: activeRecoveriesCount,
+            'Promise To Pay': ptpCount,
+            Pending: activeRecoveriesCount - ptpCount,
             Escalated: escalationsCount,
             Stopped: stoppedSafelyCount,
             Failed: allCases.filter(c => c.status === 'FAILED').length
@@ -50,6 +53,7 @@ router.get('/dashboard/metrics', async (req, res) => {
             recoveryRatePercent,
             incrementalRecoveryMinor,
             activeRecoveriesCount,
+            ptpCount,
             stoppedSafelyCount,
             escalationsCount,
             outcomeDistribution,
@@ -81,7 +85,7 @@ router.get('/transactions', async (req, res) => {
             .from(transactions)
             .innerJoin(customers, eq(transactions.customerId, customers.id))
             .orderBy(desc(transactions.createdAt))
-            .limit(200);
+            .limit(300);
         res.json(list);
     }
     catch (err) {
@@ -101,6 +105,7 @@ router.get('/recovery-cases', async (req, res) => {
             recoveredAmountMinor: recoveryCases.recoveredAmountMinor,
             currentAttempt: recoveryCases.currentAttempt,
             maxAttempts: recoveryCases.maxAttempts,
+            promiseToPayDate: recoveryCases.promiseToPayDate,
             createdAt: recoveryCases.createdAt,
             updatedAt: recoveryCases.updatedAt,
             customerName: customers.name,
@@ -194,7 +199,8 @@ router.post('/recovery-cases/:id/hinglish-negotiate', async (req, res) => {
         const [cust] = await db.select().from(customers).where(eq(customers.id, recCase.customerId));
         const amountFormatted = `₹${((recCase.revenueAtRiskMinor || tx.amountMinor) / 100).toLocaleString('en-IN')}`;
         // Run AI NLP Promise-to-Pay extraction
-        const extraction = await recoveryEngine['aiService'].extractPromiseToPay(customerReply, cust ? cust.name : 'Customer', tx ? tx.orderId : 'ORD', amountFormatted);
+        const aiService = new AIRecoveryService();
+        const extraction = await aiService.extractPromiseToPay(customerReply, cust ? cust.name : 'Customer', tx ? tx.orderId : 'ORD', amountFormatted);
         let newStatus = recCase.status;
         let promiseDateObj = null;
         if (extraction.customerIntent === 'PAY_LATER' && extraction.promiseDate) {

@@ -33,12 +33,15 @@ export const AuditTrailPage: React.FC = () => {
 
   const eventTypeColor: Record<string, string> = {
     PAYMENT_RECOVERED: 'bg-[#d4ff32] text-slate-950',
+    PROMISE_REGISTERED: 'bg-amber-100 text-amber-900 border border-amber-300 font-black',
+    CUSTOMER_READY_PAY: 'bg-[#d4ff32] text-slate-950 font-black',
     PAYMENT_FAILED: 'bg-red-100 text-red-800',
     POLICY_BLOCKED: 'bg-red-100 text-red-800',
     DIAGNOSIS_CREATED: 'bg-amber-100 text-amber-800',
     AI_RECOMMENDATION: 'bg-[#e0d8ff] text-purple-900',
     POLICY_CHECK: 'bg-sky-100 text-sky-900',
     ACTION_EXECUTED: 'bg-blue-100 text-blue-900',
+    PROVIDER_TIMEOUT: 'bg-amber-100 text-amber-800',
     VERIFICATION: 'bg-purple-100 text-purple-900',
     DUPLICATE_BLOCKED: 'bg-slate-200 text-slate-800',
     AI_FAILURE: 'bg-orange-100 text-orange-900',
@@ -75,6 +78,9 @@ export const AuditTrailPage: React.FC = () => {
             className="bg-slate-50 border border-slate-200 rounded-full px-4 py-2 text-xs font-extrabold text-slate-800 focus:outline-none"
           >
             <option value="ALL">All Event Types</option>
+            <option value="PAYMENT_RECOVERED">PAYMENT_RECOVERED</option>
+            <option value="PROMISE_REGISTERED">PROMISE_REGISTERED (PTP)</option>
+            <option value="CUSTOMER_READY_PAY">CUSTOMER_READY_PAY</option>
             <option value="PAYMENT_FAILED">PAYMENT_FAILED</option>
             <option value="DIAGNOSIS_CREATED">DIAGNOSIS_CREATED</option>
             <option value="AI_RECOMMENDATION">AI_RECOMMENDATION</option>
@@ -83,7 +89,6 @@ export const AuditTrailPage: React.FC = () => {
             <option value="ACTION_EXECUTED">ACTION_EXECUTED</option>
             <option value="PROVIDER_TIMEOUT">PROVIDER_TIMEOUT</option>
             <option value="VERIFICATION">VERIFICATION</option>
-            <option value="PAYMENT_RECOVERED">PAYMENT_RECOVERED</option>
             <option value="DUPLICATE_BLOCKED">DUPLICATE_BLOCKED</option>
             <option value="AI_FAILURE">AI_FAILURE</option>
           </select>

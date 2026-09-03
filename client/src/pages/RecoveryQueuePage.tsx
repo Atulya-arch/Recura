@@ -59,6 +59,7 @@ export const RecoveryQueuePage: React.FC = () => {
         >
           <option value="ALL">All Recovery Statuses</option>
           <option value="RECOVERED">RECOVERED</option>
+          <option value="PROMISE_TO_PAY">PROMISE TO PAY</option>
           <option value="RETRY_SCHEDULED">RETRY_SCHEDULED</option>
           <option value="ESCALATED">ESCALATED</option>
           <option value="STOPPED">STOPPED</option>
@@ -95,6 +96,11 @@ export const RecoveryQueuePage: React.FC = () => {
                   </td>
                   <td className="px-6 py-4">
                     <StatusBadge status={c.status} />
+                    {c.promiseToPayDate && (
+                      <div className="text-[10px] font-black text-amber-900 mt-1">
+                        🗓️ {new Date(c.promiseToPayDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-center font-mono font-black text-slate-900">
                     {c.currentAttempt} / {c.maxAttempts}
