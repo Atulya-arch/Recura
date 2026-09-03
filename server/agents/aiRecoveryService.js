@@ -30,9 +30,11 @@ export class AIRecoveryService {
         };
         // If Gemini API key is available, attempt LLM call
         if (this.aiClient) {
-            try {
-                const model = this.aiClient.getGenerativeModel({ model: 'gemini-1.5-flash' });
-                const response = await model.generateContent(`You are Recura's AI Revenue Recovery agent. Analyze the following failed payment/checkout transaction context and return ONLY a valid JSON object matching the required schema.
+            const candidateModels = ['gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash', 'gemini-pro'];
+            for (const modelName of candidateModels) {
+                try {
+                    const model = this.aiClient.getGenerativeModel({ model: modelName });
+                    const response = await model.generateContent(`You are Recura's AI Revenue Recovery agent. Analyze the following failed payment/checkout transaction context and return ONLY a valid JSON object matching the required schema.
 
 Input Context:
 ${JSON.stringify(promptContext, null, 2)}
@@ -47,25 +49,20 @@ Requirements:
 - hinglishScript: Polite, conversational Hinglish voice/SMS script for Indian customers (e.g. "Namaste Rahul ji! Acme Retail par aapka ₹... payment...")
 
 Return ONLY raw JSON, no markdown fences.`);
-                const rawText = response.response.text() || '';
-                const cleanedJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-                const parsed = JSON.parse(cleanedJson);
-                const validated = AiDecisionSchema.safeParse(parsed);
-                if (validated.success) {
-                    return { decision: validated.data, aiFailed: false };
+                    const rawText = response.response.text() || '';
+                    const cleanedJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+                    const parsed = JSON.parse(cleanedJson);
+                    const validated = AiDecisionSchema.safeParse(parsed);
+                    if (validated.success) {
+                        return { decision: validated.data, aiFailed: false };
+                    }
                 }
-                else {
-                    return {
-                        decision: null,
-                        aiFailed: true,
-                        failureReason: `AI response failed Zod schema validation: ${validated.error.message}`
-                    };
+                catch (err) {
+                    // If 404 on model name, try next candidate model
+                    if (modelName === candidateModels[candidateModels.length - 1]) {
+                        console.warn('Gemini API call timed out or failed across candidate models, falling back to local deterministic AI heuristic:', err.message);
+                    }
                 }
-            }
-            catch (err) {
-                console.warn('Gemini API call timed out or failed, falling back to local deterministic AI heuristic:', err.message);
-                const heuristicDecision = this.runHeuristicAnalysis(transaction, customer, history);
-                return { decision: heuristicDecision, aiFailed: false };
             }
         }
         // High-precision local heuristic reasoning fallback when API key is not present or offline
@@ -79,9 +76,11 @@ Return ONLY raw JSON, no markdown fences.`);
         const text = customerReply.trim().toLowerCase();
         // If Gemini client is active, attempt intelligent LLM parsing
         if (this.aiClient) {
-            try {
-                const model = this.aiClient.getGenerativeModel({ model: 'gemini-1.5-flash' });
-                const prompt = `You are Recura's Promise-to-Pay (PTP) NLP parser for Indian merchant checkout recovery.
+            const candidateModels = ['gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-flash', 'gemini-pro'];
+            for (const modelName of candidateModels) {
+                try {
+                    const model = this.aiClient.getGenerativeModel({ model: modelName });
+                    const prompt = `You are Recura's Promise-to-Pay (PTP) NLP parser for Indian merchant checkout recovery.
 Base Today Date: ${baseDate.toISOString()}
 Customer Reply: "${customerReply}"
 
@@ -96,16 +95,17 @@ Schema Requirements:
 - hinglishReply: polite Hinglish confirmation message to the customer
 
 Return ONLY raw JSON matching this schema.`;
-                const res = await model.generateContent(prompt);
-                const raw = res.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
-                const parsed = JSON.parse(raw);
-                const validated = PromiseToPayExtractionSchema.safeParse(parsed);
-                if (validated.success) {
-                    return validated.data;
+                    const res = await model.generateContent(prompt);
+                    const raw = res.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+                    const parsed = JSON.parse(raw);
+                    const validated = PromiseToPayExtractionSchema.safeParse(parsed);
+                    if (validated.success) {
+                        return validated.data;
+                    }
                 }
-            }
-            catch (err) {
-                console.warn('Gemini PTP extraction fallback to heuristic engine:', err);
+                catch (err) {
+                    // Try next model
+                }
             }
         }
         // Intelligent Deterministic Hinglish/English PTP Parser
