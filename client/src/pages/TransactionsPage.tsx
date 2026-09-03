@@ -1,0 +1,143 @@
+import React, { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
+import { FormatMoney } from '../components/FormatMoney';
+import { StatusBadge } from '../components/StatusBadge';
+import { fetchApi } from '../api/client';
+import { Search, Filter, RefreshCw } from 'lucide-react';
+
+export const TransactionsPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('q') || '');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (q !== null) {
+      setSearchTerm(q);
+    }
+  }, [searchParams]);
+
+  const { data: txs, isLoading } = useQuery<any[]>({
+    queryKey: ['transactions'],
+    queryFn: () => fetchApi<any[]>('/api/transactions')
+  });
+
+  if (isLoading || !txs) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <RefreshCw className="w-8 h-8 text-[#161618] animate-spin" />
+      </div>
+    );
+  }
+
+  const filtered = txs.filter((t) => {
+    const matchesSearch =
+      t.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.customerEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (t.failureReason && t.failureReason.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const matchesStatus = statusFilter === 'ALL' || t.paymentStatus === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Transaction Work Queue</h1>
+          <p className="text-xs text-slate-500 font-medium mt-1">Search and filter merchant payment transactions and authorization logs.</p>
+        </div>
+      </div>
+
+      {/* Filter Controls */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white border border-slate-200 p-4 rounded-3xl shadow-flux-card">
+        <div className="flex items-center space-x-3 w-full sm:w-auto">
+          <div className="flex items-center space-x-2">
+            <Filter className="w-4 h-4 text-slate-500" />
+            <span className="text-xs font-black text-slate-800">Filter Status:</span>
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="bg-slate-50 border border-slate-200 rounded-full px-4 py-2 text-xs font-extrabold text-slate-800 focus:outline-none"
+          >
+            <option value="ALL">All Payment Statuses</option>
+            <option value="FAILED">FAILED</option>
+            <option value="SUCCESS">SUCCESS</option>
+            <option value="PENDING">PENDING</option>
+          </select>
+        </div>
+
+        <div className="flex items-center space-x-3">
+          {searchTerm && (
+            <div className="flex items-center space-x-1.5 bg-[#e0d8ff] border border-purple-300 px-3 py-1 rounded-full text-xs font-extrabold text-purple-950">
+              <span>Query: "{searchTerm}"</span>
+              <button
+                onClick={() => setSearchTerm('')}
+                className="text-purple-700 hover:text-purple-950 font-black ml-1"
+                title="Clear search query"
+              >
+                ×
+              </button>
+            </div>
+          )}
+          <span className="text-xs font-bold text-slate-500">
+            Showing <strong className="text-slate-900 font-mono font-black">{filtered.length}</strong> transactions
+          </span>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-flux-card">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs text-slate-700">
+            <thead className="bg-slate-50 text-slate-900 font-black border-b border-slate-200 uppercase tracking-wider text-[10px]">
+              <tr>
+                <th className="px-6 py-4">Customer</th>
+                <th className="px-6 py-4">Order ID</th>
+                <th className="px-6 py-4">Amount</th>
+                <th className="px-6 py-4">Method</th>
+                <th className="px-6 py-4">Payment Status</th>
+                <th className="px-6 py-4">Failure Reason</th>
+                <th className="px-6 py-4 text-center">Attempts</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.map((t) => (
+                <tr key={t.id} className="hover:bg-slate-50/80 transition duration-150">
+                  <td className="px-6 py-4">
+                    <div className="font-extrabold text-slate-900">{t.customerName}</div>
+                    <div className="text-[11px] text-slate-400 font-medium">{t.customerEmail}</div>
+                  </td>
+                  <td className="px-6 py-4 font-mono font-black text-purple-900">{t.orderId}</td>
+                  <td className="px-6 py-4 font-black text-slate-950">
+                    <FormatMoney amountMinor={t.amountMinor} currency={t.currency} />
+                  </td>
+                  <td className="px-6 py-4 font-mono text-xs font-bold text-slate-600">{t.paymentMethod}</td>
+                  <td className="px-6 py-4">
+                    <StatusBadge status={t.paymentStatus} />
+                  </td>
+                  <td className="px-6 py-4 max-w-xs truncate font-medium text-slate-600">
+                    {t.failureReason || 'N/A'}
+                  </td>
+                  <td className="px-6 py-4 text-center font-mono font-black text-slate-900">
+                    {t.attemptCount}
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400 font-medium">
+                    No transactions match the selected filter criteria.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};

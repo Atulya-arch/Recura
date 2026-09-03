@@ -1,0 +1,32 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { useQuery } from '@tanstack/react-query';
+import { FormatMoney } from '../components/FormatMoney';
+import { fetchApi } from '../api/client';
+import { TrendingUp, Zap, RefreshCw, ArrowDown } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+export const AnalyticsPage = () => {
+    const { data: evalRes, isLoading, refetch } = useQuery({
+        queryKey: ['analytics-evaluation'],
+        queryFn: () => fetchApi('/api/analytics')
+    });
+    if (isLoading || !evalRes) {
+        return (_jsx("div", { className: "flex items-center justify-center min-h-[60vh]", children: _jsx(RefreshCw, { className: "w-8 h-8 text-[#161618] animate-spin" }) }));
+    }
+    const comparisonData = [
+        {
+            name: 'Naive Baseline',
+            RecoveredRevenue: evalRes.baseline.recoveredRevenueMinor / 100,
+        },
+        {
+            name: 'Recura AI',
+            RecoveredRevenue: evalRes.recura.recoveredRevenueMinor / 100,
+        }
+    ];
+    const funnelData = [
+        { stage: 'Failed Payments', count: evalRes.failedTransactions },
+        { stage: 'Eligible Candidates', count: evalRes.eligibleCasesCount },
+        { stage: 'Interventions', count: evalRes.recura.interventionsCount },
+        { stage: 'Successful Recoveries', count: evalRes.recura.successfulRecoveriesCount }
+    ];
+    return (_jsxs("div", { className: "space-y-6", children: [_jsxs("div", { className: "flex flex-col sm:flex-row sm:items-center justify-between gap-4", children: [_jsxs("div", { children: [_jsx("h1", { className: "text-3xl font-black text-slate-900 tracking-tight", children: "Recovery Performance Analytics" }), _jsx("p", { className: "text-xs text-slate-500 font-medium mt-1", children: "Empirical evaluation comparing Recura AI Autopilot against naive retry baseline across the full dataset." })] }), _jsxs("button", { onClick: () => refetch(), className: "flex items-center space-x-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-900 text-xs font-black rounded-full border border-slate-200 shadow-sm transition", children: [_jsx(RefreshCw, { className: "w-3.5 h-3.5" }), _jsx("span", { children: "Re-run Evaluation" })] })] }), _jsxs("div", { className: "grid grid-cols-1 md:grid-cols-3 gap-5", children: [_jsxs("div", { className: "bg-white border border-slate-200 rounded-3xl p-6 shadow-flux-card space-y-3", children: [_jsx("span", { className: "text-xs font-black text-slate-400 uppercase tracking-wider block", children: "Naive Baseline" }), _jsx("div", { className: "text-2xl font-black text-slate-700 font-mono", children: _jsx(FormatMoney, { amountMinor: evalRes.baseline.recoveredRevenueMinor }) }), _jsxs("div", { className: "text-xs text-slate-500 font-semibold", children: ["Recovery Rate: ", _jsxs("span", { className: "text-slate-900 font-black", children: [evalRes.baseline.recoveryRatePercent, "%"] })] })] }), _jsxs("div", { className: "bg-[#161618] text-white border border-slate-700 rounded-3xl p-6 shadow-2xl space-y-3", children: [_jsxs("div", { className: "flex items-center justify-between", children: [_jsx("span", { className: "text-xs font-black text-[#d4ff32] uppercase tracking-wider", children: "Recura AI Autopilot" }), _jsx(Zap, { className: "w-4 h-4 text-[#d4ff32]" })] }), _jsx("div", { className: "text-2xl font-black text-white font-mono", children: _jsx(FormatMoney, { amountMinor: evalRes.recura.recoveredRevenueMinor }) }), _jsxs("div", { className: "text-xs text-slate-400 font-semibold", children: ["Recovery Rate: ", _jsxs("span", { className: "text-[#d4ff32] font-black", children: [evalRes.recura.recoveryRatePercent, "%"] })] })] }), _jsxs("div", { className: "bg-white border border-slate-200 rounded-3xl p-6 shadow-flux-card space-y-3", children: [_jsxs("div", { className: "flex items-center justify-between", children: [_jsx("span", { className: "text-xs font-black text-slate-400 uppercase tracking-wider", children: "Incremental Lift" }), _jsx(TrendingUp, { className: "w-4 h-4 text-slate-900" })] }), _jsxs("div", { className: "text-2xl font-black text-slate-950 font-mono", children: ["+", _jsx(FormatMoney, { amountMinor: evalRes.incrementalRevenueMinor })] }), _jsx("div", { className: "text-xs font-semibold", children: _jsxs("span", { className: "inline-flex px-2.5 py-0.5 rounded-full text-[11px] font-black bg-[#d4ff32] text-slate-950", children: ["+", evalRes.incrementalRatePercent, "% lift vs baseline"] }) })] })] }), _jsxs("div", { className: "bg-white border border-slate-200 rounded-3xl p-6 shadow-flux-card", children: [_jsx("h3", { className: "text-base font-black text-slate-900 mb-4 tracking-tight", children: "Recura vs Baseline \u2014 Revenue Recovered (\u20B9)" }), _jsx("div", { className: "h-64", children: _jsx(ResponsiveContainer, { width: "100%", height: "100%", children: _jsxs(BarChart, { data: comparisonData, children: [_jsx(CartesianGrid, { strokeDasharray: "3 3", stroke: "#f1f5f9", vertical: false }), _jsx(XAxis, { dataKey: "name", stroke: "#94a3b8", tick: { fill: '#64748b', fontSize: 12, fontWeight: 700 } }), _jsx(YAxis, { stroke: "#94a3b8", tick: { fill: '#64748b', fontSize: 11 } }), _jsx(Tooltip, { contentStyle: { backgroundColor: '#161618', borderColor: '#333338', borderRadius: '0.75rem', color: '#ffffff' }, itemStyle: { color: '#d4ff32' }, formatter: (value) => [`₹${Number(value).toLocaleString('en-IN')}`, 'Revenue Recovered'] }), _jsx(Bar, { dataKey: "RecoveredRevenue", name: "Recovered Revenue", fill: "#b8a5fe", radius: [8, 8, 0, 0] })] }) }) })] }), _jsxs("div", { className: "bg-white border border-slate-200 rounded-3xl p-6 shadow-flux-card", children: [_jsx("h3", { className: "text-base font-black text-slate-900 mb-5 tracking-tight", children: "Recovery Funnel Breakdown" }), _jsx("div", { className: "grid grid-cols-2 lg:grid-cols-4 gap-4", children: funnelData.map((item, idx) => (_jsxs("div", { className: "relative flex flex-col items-start bg-slate-50 border border-slate-200 rounded-2xl p-4 shadow-sm", children: [_jsx("span", { className: "text-[11px] text-slate-400 font-bold block", children: item.stage }), _jsx("span", { className: "text-2xl font-black text-slate-950 font-mono mt-1", children: item.count }), idx < funnelData.length - 1 && (_jsx(ArrowDown, { className: "hidden lg:block absolute -right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 z-10 bg-white rounded-full" }))] }, item.stage))) })] })] }));
+};
