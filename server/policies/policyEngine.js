@@ -43,11 +43,12 @@ export class PolicyEngine {
      * Independent Policy Validation for AI Recommendations (Section 15)
      */
     static evaluateAiRecommendation(recommendation, recoveryCase, previousActions, policy = PolicyEngine.DEFAULT_POLICY) {
-        // 1. Confidence check
-        if (recommendation.confidence < policy.minimumAiConfidence) {
+        // 1. Confidence check (supports both 65 and 0.65 formats)
+        const minConfidenceFraction = policy.minimumAiConfidence > 1 ? policy.minimumAiConfidence / 100 : policy.minimumAiConfidence;
+        if (recommendation.confidence < minConfidenceFraction) {
             return {
                 allowed: false,
-                blockReason: `AI confidence (${(recommendation.confidence * 100).toFixed(1)}%) is below merchant policy threshold (${(policy.minimumAiConfidence * 100).toFixed(1)}%)`,
+                blockReason: `AI confidence (${(recommendation.confidence * 100).toFixed(1)}%) is below merchant policy threshold (${(minConfidenceFraction * 100).toFixed(1)}%)`,
                 suggestedAction: RecoveryActionType.ESCALATE
             };
         }
