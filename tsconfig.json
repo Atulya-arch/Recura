@@ -9,11 +9,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "baseUrl": ".",
     "paths": {
-      "@shared/*": ["shared/*"],
-      "@server/*": ["server/*"],
-      "@client/*": ["client/src/*"]
+      "@shared/*": ["./shared/*"],
+      "@server/*": ["./server/*"],
+      "@client/*": ["./client/src/*"]
     }
   },
   "include": ["server/**/*", "shared/**/*", "client/src/**/*", "scripts/**/*", "tests/**/*"]
