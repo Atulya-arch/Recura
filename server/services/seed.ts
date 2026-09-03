@@ -1,6 +1,6 @@
 import { db, initDb, sqlite } from '../db/index.js';
-import { merchants, customers, transactions, policies } from '../db/schema.js';
-import { PaymentStatus, FailureCategory } from '../../shared/enums.js';
+import { merchants, customers, transactions, policies, recoveryCases, auditEvents } from '../db/schema.js';
+import { PaymentStatus, FailureCategory, RecoveryStatus } from '../../shared/enums.js';
 
 // Deterministic Mulberry32 PRNG
 function mulberry32(a: number) {
@@ -90,6 +90,8 @@ export async function seedDatabase(totalTransactions = 1200, seedValue = 42) {
 
   // Generate transactions within active recovery window (last 48 hours)
   const txBatch: any[] = [];
+  const casesBatch: any[] = [];
+  const auditBatch: any[] = [];
   const nowMs = Date.now();
 
   for (let i = 1; i <= totalTransactions; i++) {
@@ -126,19 +128,54 @@ export async function seedDatabase(totalTransactions = 1200, seedValue = 42) {
       failureReason,
       paymentMethod: pm,
       checkoutStatus,
-      attemptCount: paymentStatus === PaymentStatus.FAILED ? 1 : 1,
+      attemptCount: 1,
       createdAt: txTime,
       updatedAt: txTime
     });
+
+    // If transaction failed, create an active recovery candidate case in the queue
+    if (paymentStatus === PaymentStatus.FAILED) {
+      const caseId = `rc_${10000 + i}`;
+      casesBatch.push({
+        id: caseId,
+        transactionId: txId,
+        customerId: cust.id,
+        status: RecoveryStatus.DETECTED,
+        recoveryEligible: !cust.optedOut,
+        revenueAtRiskMinor: amountMinor,
+        recoveredAmountMinor: 0,
+        currentAttempt: 0,
+        maxAttempts: 3,
+        createdAt: txTime,
+        updatedAt: txTime
+      });
+
+      auditBatch.push({
+        id: `aud_${10000 + i}`,
+        recoveryCaseId: caseId,
+        eventType: 'PAYMENT_FAILED',
+        metadata: { failureReason, amountMinor },
+        createdAt: txTime
+      });
+    }
   }
 
-  // Insert in batches with SQLite transaction
+  // Insert transactions in batches
   const batchSize = 100;
   for (let i = 0; i < txBatch.length; i += batchSize) {
-    const chunk = txBatch.slice(i, i + batchSize);
-    await db.insert(transactions).values(chunk);
+    await db.insert(transactions).values(txBatch.slice(i, i + batchSize));
   }
 
-  console.log(`Seeded database with 1 Merchant, ${customerList.length} Customers, and ${totalTransactions} Transactions.`);
-  return { merchantId, customerCount: customerList.length, transactionCount: totalTransactions };
+  // Insert candidate recovery cases in batches
+  for (let i = 0; i < casesBatch.length; i += batchSize) {
+    await db.insert(recoveryCases).values(casesBatch.slice(i, i + batchSize));
+  }
+
+  // Insert initial audit logs in batches
+  for (let i = 0; i < auditBatch.length; i += batchSize) {
+    await db.insert(auditEvents).values(auditBatch.slice(i, i + batchSize));
+  }
+
+  console.log(`Seeded database with 1 Merchant, ${customerList.length} Customers, ${totalTransactions} Transactions, and ${casesBatch.length} Recovery Cases.`);
+  return { merchantId, customerCount: customerList.length, transactionCount: totalTransactions, casesCount: casesBatch.length };
 }
