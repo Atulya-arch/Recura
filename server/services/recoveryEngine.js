@@ -126,7 +126,7 @@ export class RecoveryEngine {
             });
             await db
                 .update(recoveryCases)
-                .set({ status: RecoveryStatus.ESCALATED, updatedAt: new Date() })
+                .set({ status: RecoveryStatus.ESCALATED, updatedAt: new Date().toISOString() })
                 .where(eq(recoveryCases.id, caseId));
             await db.insert(auditEvents).values({
                 id: `aud_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -195,8 +195,8 @@ export class RecoveryEngine {
             status: execution.action.status,
             idempotencyKey: execution.action.idempotencyKey,
             attemptNumber: execution.action.attemptNumber,
-            scheduledAt: new Date(execution.action.scheduledAt),
-            executedAt: execution.action.executedAt ? new Date(execution.action.executedAt) : null,
+            scheduledAt: execution.action.scheduledAt || new Date().toISOString(),
+            executedAt: execution.action.executedAt || null,
             result: execution.action.result
         });
         // Save Audit Events
@@ -216,13 +216,13 @@ export class RecoveryEngine {
             status: execution.updatedCase.status,
             currentAttempt: execution.updatedCase.currentAttempt,
             recoveredAmountMinor: execution.updatedCase.recoveredAmountMinor,
-            updatedAt: new Date()
+            updatedAt: new Date().toISOString()
         })
             .where(eq(recoveryCases.id, caseId));
         if (execution.updatedCase.recoveredAmountMinor > 0) {
             await db
                 .update(transactions)
-                .set({ paymentStatus: PaymentStatus.SUCCESS, updatedAt: new Date() })
+                .set({ paymentStatus: PaymentStatus.SUCCESS, updatedAt: new Date().toISOString() })
                 .where(eq(transactions.id, transactionId));
         }
         const [finalCase] = await db.select().from(recoveryCases).where(eq(recoveryCases.id, caseId));

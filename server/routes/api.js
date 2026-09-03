@@ -169,7 +169,7 @@ router.post('/recovery-cases/:id/execute', async (req, res) => {
 router.post('/recovery-cases/:id/stop', async (req, res) => {
     try {
         const { id } = req.params;
-        await db.update(recoveryCases).set({ status: RecoveryStatus.STOPPED, updatedAt: new Date() }).where(eq(recoveryCases.id, id));
+        await db.update(recoveryCases).set({ status: RecoveryStatus.STOPPED, updatedAt: new Date().toISOString() }).where(eq(recoveryCases.id, id));
         await db.insert(auditEvents).values({
             id: `aud_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
             recoveryCaseId: id,
@@ -208,8 +208,8 @@ router.post('/recovery-cases/:id/hinglish-negotiate', async (req, res) => {
             promiseDateObj = new Date(extraction.promiseDate);
             await db.update(recoveryCases).set({
                 status: newStatus,
-                promiseToPayDate: promiseDateObj,
-                updatedAt: new Date()
+                promiseToPayDate: promiseDateObj.toISOString(),
+                updatedAt: new Date().toISOString()
             }).where(eq(recoveryCases.id, id));
             await db.insert(auditEvents).values({
                 id: `aud_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -243,7 +243,7 @@ router.post('/recovery-cases/:id/hinglish-negotiate', async (req, res) => {
             newStatus = RecoveryStatus.STOPPED;
             await db.update(recoveryCases).set({
                 status: newStatus,
-                updatedAt: new Date()
+                updatedAt: new Date().toISOString()
             }).where(eq(recoveryCases.id, id));
             await db.insert(auditEvents).values({
                 id: `aud_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -321,7 +321,7 @@ router.put('/policies', async (req, res) => {
                 maxReminders: body.maxReminders ?? existing.maxReminders,
                 maxAutomatedActions: body.maxAutomatedActions ?? existing.maxAutomatedActions,
                 minimumAiConfidence: body.minimumAiConfidence ? Math.round(body.minimumAiConfidence * 100) : existing.minimumAiConfidence,
-                updatedAt: new Date()
+                updatedAt: new Date().toISOString()
             }).where(eq(policies.id, existing.id));
         }
         else {
@@ -332,7 +332,8 @@ router.put('/policies', async (req, res) => {
                 maxRecoveryWindowHours: body.maxRecoveryWindowHours ?? 72,
                 maxReminders: body.maxReminders ?? 2,
                 maxAutomatedActions: body.maxAutomatedActions ?? 3,
-                minimumAiConfidence: body.minimumAiConfidence ? Math.round(body.minimumAiConfidence * 100) : 65
+                minimumAiConfidence: body.minimumAiConfidence ? Math.round(body.minimumAiConfidence * 100) : 65,
+                updatedAt: new Date().toISOString()
             });
         }
         const [updated] = await db.select().from(policies);

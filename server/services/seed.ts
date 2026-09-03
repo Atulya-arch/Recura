@@ -1,4 +1,4 @@
-import { db, initDb, pgliteClient } from '../db/index.js';
+import { db, initDb, sqlite } from '../db/index.js';
 import { merchants, customers, transactions, policies } from '../db/schema.js';
 import { PaymentStatus, FailureCategory } from '../../shared/enums.js';
 
@@ -30,7 +30,7 @@ export async function seedDatabase(totalTransactions = 1200, seedValue = 42) {
   const rand = mulberry32(seedValue);
 
   // Clear existing records
-  await pgliteClient.exec(`
+  sqlite.exec(`
     DELETE FROM audit_events;
     DELETE FROM ai_decisions;
     DELETE FROM recovery_actions;
@@ -45,7 +45,7 @@ export async function seedDatabase(totalTransactions = 1200, seedValue = 42) {
   await db.insert(merchants).values({
     id: merchantId,
     name: 'Acme Retail India',
-    createdAt: new Date('2025-01-01T00:00:00Z')
+    createdAt: new Date('2025-01-01T00:00:00Z').toISOString()
   });
 
   await db.insert(policies).values({
@@ -56,7 +56,7 @@ export async function seedDatabase(totalTransactions = 1200, seedValue = 42) {
     maxReminders: 2,
     maxAutomatedActions: 3,
     minimumAiConfidence: 65,
-    updatedAt: new Date('2025-01-01T00:00:00Z')
+    updatedAt: new Date('2025-01-01T00:00:00Z').toISOString()
   });
 
   // Generate ~200 customers
@@ -84,7 +84,7 @@ export async function seedDatabase(totalTransactions = 1200, seedValue = 42) {
       email: c.email,
       phone: c.phone,
       optedOut: c.optedOut,
-      createdAt: new Date(Date.now() - Math.floor(rand() * 60 * 24 * 60 * 60 * 1000))
+      createdAt: new Date(Date.now() - Math.floor(rand() * 60 * 24 * 60 * 60 * 1000)).toISOString()
     });
   }
 
@@ -97,7 +97,7 @@ export async function seedDatabase(totalTransactions = 1200, seedValue = 42) {
     const amountMinor = Math.floor(499 + rand() * 15000) * 100; // ₹499 to ₹15,499 in paise
     const isSuccess = rand() > 0.35; // 65% success rate initially
     const pm = PAYMENT_METHODS[Math.floor(rand() * PAYMENT_METHODS.length)];
-    const txTime = new Date(nowMs - Math.floor(rand() * 48 * 60 * 60 * 1000));
+    const txTime = new Date(nowMs - Math.floor(rand() * 48 * 60 * 60 * 1000)).toISOString();
 
     let paymentStatus = PaymentStatus.SUCCESS;
     let failureReason: string | null = null;
@@ -132,7 +132,7 @@ export async function seedDatabase(totalTransactions = 1200, seedValue = 42) {
     });
   }
 
-  // Insert in batches
+  // Insert in batches with SQLite transaction
   const batchSize = 100;
   for (let i = 0; i < txBatch.length; i += batchSize) {
     const chunk = txBatch.slice(i, i + batchSize);

@@ -3,16 +3,19 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'node:path';
 import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { router as apiRouter } from './routes/api.js';
-import { initDb, db } from './db/index.js';
+import { initDb, sqlite } from './db/index.js';
 import { seedDatabase } from './services/seed.js';
-import { transactions } from './db/schema.js';
 
 dotenv.config();
 
+function logMemory(stage: string) {
+  const mem = process.memoryUsage();
+  console.log(`📊 [Memory ${stage}] RSS: ${(mem.rss / 1024 / 1024).toFixed(1)}MB | Heap: ${(mem.heapUsed / 1024 / 1024).toFixed(1)}MB / ${(mem.heapTotal / 1024 / 1024).toFixed(1)}MB`);
+}
+
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = Number(process.env.PORT) || 3001;
 
 app.use(cors());
 app.use(express.json());
@@ -21,7 +24,16 @@ app.use(express.json());
 app.use('/api', apiRouter);
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  const mem = process.memoryUsage();
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    memory: {
+      rssMb: Number((mem.rss / 1024 / 1024).toFixed(1)),
+      heapUsedMb: Number((mem.heapUsed / 1024 / 1024).toFixed(1)),
+      heapTotalMb: Number((mem.heapTotal / 1024 / 1024).toFixed(1))
+    }
+  });
 });
 
 // Serve frontend static build
@@ -51,20 +63,26 @@ app.get('*', (req, res, next) => {
 
 async function startServer() {
   try {
+    logMemory('Startup Baseline');
     console.log('⚡ Initializing Recura backend engine...');
     await initDb();
+    logMemory('After Database Init');
 
-    // Check if database needs initial seed
-    const txCount = (await db.select().from(transactions)).length;
+    // Fast O(1) table count query using SQLite directly
+    const row = sqlite.prepare('SELECT count(*) as count FROM transactions').get() as { count: number } | undefined;
+    const txCount = row ? row.count : 0;
+
     if (txCount === 0) {
       console.log('🌱 Database empty. Running initial synthetic dataset seed...');
       await seedDatabase(1200, 42);
+      logMemory('After Database Seed');
     } else {
       console.log(`📦 Loaded existing database with ${txCount} transactions.`);
     }
 
-    app.listen(Number(PORT), '0.0.0.0', () => {
-      console.log(`🚀 Recura Server running on http://127.0.0.1:${PORT}`);
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Recura Server running on http://0.0.0.0:${PORT}`);
+      logMemory('Server Ready');
     });
   } catch (err) {
     console.error('❌ Failed to start server:', err);
