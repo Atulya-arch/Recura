@@ -2,19 +2,23 @@
 
 > **Recura** is a production-grade, policy-governed AI revenue recovery agent for modern merchants. It autonomously detects revenue at risk, diagnoses payment failures with contextual reasoning, negotiates recovery via **Hinglish AI Voice/Chat**, extracts **Promise-to-Pay (PTP)** commitments, strictly enforces merchant policy guardrails, executes idempotent retries, and measures actual recovered revenue against standard baselines.
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-recura.onrender.com-lime?style=for-the-badge&logo=render&logoColor=white)](https://recura.onrender.com)
+[![Tests](https://img.shields.io/badge/Tests-22%20Passed-brightgreen?style=for-the-badge&logo=vitest&logoColor=white)](https://github.com/Atulya-arch/Recura)
+[![RAM Usage](https://img.shields.io/badge/Memory-~75MB%20RSS-blue?style=for-the-badge&logo=node.js&logoColor=white)](https://github.com/Atulya-arch/Recura)
+
 ---
 
 ## 🌟 Key Highlights & Standout Capabilities
 
 | Feature | Description |
 | :--- | :--- |
-| 🧠 **Dual AI Engine** | Powered by **Google Gemini AI** with an ultra-fast deterministic fallback engine. |
+| 🧠 **Dual AI Engine** | Powered by **Google Gemini 3.6 Flash** with an ultra-fast deterministic fallback heuristic engine. |
 | 🎙️ **Hinglish AI Voice & Chat** | Generates culturally nuanced Hindi+English hybrid scripts for Indian customers with real in-browser audible voice synthesis. |
 | 📅 **Promise-to-Pay (PTP) NLP** | Autonomous natural language date extractor (e.g. *"Salary 7th ko aayegi, tab charge kar lena"*) that locks and schedules future retry windows. |
 | 🛡️ **Merchant Policy Guardrails** | Hard limits on retries, automated actions, recovery timeframes, and minimum AI confidence thresholds. **AI recommends. Policy governs.** |
 | 🔒 **Idempotency & Timeout Safety** | SHA-256 idempotency key deduplication prevents double charges. Gateway timeouts trigger authoritative state verification. |
-| 📦 **Embedded PGlite PostgreSQL** | Full Postgres engine running in-process via WebAssembly. Zero cloud DB configuration or external connection strings required. |
-| 🎨 **Flux-Inspired UI Theme** | High-contrast modern interface with matte dark sidebar, warm grey canvas, and Volt Lime (`#d4ff32`) accents. |
+| 📦 **Ultra-Low Memory SQLite DB** | Native high-speed SQLite engine (`better-sqlite3` + `drizzle-orm`) using only ~75MB RAM. Zero external cloud DB required. |
+| 🎨 **Flux-Inspired UI Theme** | High-contrast modern interface with matte dark sidebar, warm canvas, and Volt Lime (`#d4ff32`) accents. |
 
 ---
 
@@ -28,7 +32,7 @@
                                 v
                +----------------------------------+
                |        AI REASONING ENGINE       |  <-- Failure root-cause diagnosis
-               |  (Gemini + Hinglish Script Gen)  |  <-- Recommends Action & Customer copy
+               | (Gemini 3.6 Flash + Hinglish)    |  <-- Recommends Action & Customer copy
                +----------------+-----------------+
                                 |
                                 v
@@ -50,10 +54,10 @@
                                  v
                +----------------------------------+
                |        IMMUTABLE AUDIT LOG       |  <-- Every decision recorded for merchants
-               |    (PostgreSQL Event Ledger)     |
+               |     (SQLite Event Ledger)        |
                +----------------+-----------------+
-                                |
-                                v
+                                 |
+                                 v
                +----------------------------------+
                |  MEASURE INCREMENTAL REVENUE     |  <-- Dynamic calculation vs naive baseline
                +----------------------------------+
@@ -65,7 +69,7 @@
 
 | Area | Handled By | Guarantees |
 | :--- | :--- | :--- |
-| **Failure Diagnosis & Strategy** | **AI Agent (Gemini)** | Identifies root causes (`NETWORK_FAILURE`, `INSUFFICIENT_FUNDS`, `BANK_FAILURE`, `ABANDONMENT`). |
+| **Failure Diagnosis & Strategy** | **AI Agent (Gemini 3.6 Flash)** | Identifies root causes (`NETWORK_FAILURE`, `INSUFFICIENT_FUNDS`, `BANK_FAILURE`, `ABANDONMENT`). |
 | **Hinglish Communication** | **AI Agent** | Contextual personalized communication tailored for Indian merchants & buyers. |
 | **PTP Date Extraction** | **AI NLP Parser** | Extracts promised payment dates from unstructured customer replies. |
 | **Money Calculations** | **Deterministic Engine** | All calculations performed in integer minor units (paise/cents). No floating-point inaccuracies. |
@@ -119,10 +123,10 @@ Open **[http://localhost:3000](http://localhost:3000)** in your browser!
 | Command | Description |
 | :--- | :--- |
 | `npm run dev` | Starts concurrent backend API server on `:3001` and Vite client on `:3000`. |
-| `npm test` | Runs the Vitest test suite (**19 unit tests passing**). |
-| `npm run build` | Compiles TypeScript and builds production frontend bundle in `/dist`. |
-| `npm run seed` | Seeds 1,200 deterministic synthetic transactions into embedded PostgreSQL. |
-| `npm run evaluate` | Runs batch evaluation comparing Recura Autopilot against naive baseline. |
+| `npm test` | Runs the Vitest test suite (**22 unit tests passing**). |
+| `npm run build` | Compiles TypeScript, builds React SPA in `dist/client`, and bundles Node backend. |
+| `npm run seed` | Seeds 1,200 transactions & 417 candidate cases into embedded SQLite database. |
+| `npm run evaluate` | Runs high-speed batch evaluation comparing Recura Autopilot against naive baseline. |
 | `npm run demo` | Executes deterministic terminal recovery workflows. |
 
 ---
@@ -140,10 +144,10 @@ In the **Overview Dashboard**, use the interactive scenario buttons to test the 
 
 ## 7. Cloud Deployment (1-Click Monolith)
 
-Recura is packaged as a zero-dependency self-contained monolith (Express backend + Embedded PGlite DB + React static build).
+Recura is packaged as a zero-dependency self-contained monolith (Express backend + Embedded SQLite DB + React SPA static build).
 
 ### Deploying to Render.com:
-1. Create a **New Web Service** connected to your GitHub repo.
+1. Create a **New Web Service** connected to your GitHub repo (`https://github.com/Atulya-arch/Recura.git`).
 2. **Runtime**: `Node`
 3. **Build Command**: `npm install && npm run build && npm run seed`
 4. **Start Command**: `npm start`
@@ -151,4 +155,4 @@ Recura is packaged as a zero-dependency self-contained monolith (Express backend
    - `NODE_ENV`: `production`
    - `GEMINI_API_KEY`: *(Your Google Gemini API Key)*
 
-*(No PostgreSQL database service or Razorpay account needed — PGlite and Simulation Provider run seamlessly out of the box).*
+*(No external database service or payment gateway account needed — embedded SQLite and the Simulation Provider run seamlessly out of the box).*
