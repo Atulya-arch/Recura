@@ -178,6 +178,89 @@ router.post('/recovery-cases/:id/stop', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+// POST /api/recovery-cases/:id/hinglish-negotiate (Promise-to-Pay NLP Extraction & Negotiation)
+router.post('/recovery-cases/:id/hinglish-negotiate', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { customerReply } = req.body;
+        if (!customerReply || typeof customerReply !== 'string') {
+            return res.status(400).json({ error: 'customerReply text is required' });
+        }
+        const [recCase] = await db.select().from(recoveryCases).where(eq(recoveryCases.id, id));
+        if (!recCase) {
+            return res.status(404).json({ error: 'Recovery case not found' });
+        }
+        const [tx] = await db.select().from(transactions).where(eq(transactions.id, recCase.transactionId));
+        const [cust] = await db.select().from(customers).where(eq(customers.id, recCase.customerId));
+        const amountFormatted = `₹${((recCase.revenueAtRiskMinor || tx.amountMinor) / 100).toLocaleString('en-IN')}`;
+        // Run AI NLP Promise-to-Pay extraction
+        const extraction = await recoveryEngine['aiService'].extractPromiseToPay(customerReply, cust ? cust.name : 'Customer', tx ? tx.orderId : 'ORD', amountFormatted);
+        let newStatus = recCase.status;
+        let promiseDateObj = null;
+        if (extraction.customerIntent === 'PAY_LATER' && extraction.promiseDate) {
+            newStatus = RecoveryStatus.PROMISE_TO_PAY;
+            promiseDateObj = new Date(extraction.promiseDate);
+            await db.update(recoveryCases).set({
+                status: newStatus,
+                promiseToPayDate: promiseDateObj,
+                updatedAt: new Date()
+            }).where(eq(recoveryCases.id, id));
+            await db.insert(auditEvents).values({
+                id: `aud_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                recoveryCaseId: id,
+                eventType: 'PROMISE_REGISTERED',
+                metadata: {
+                    customerReply,
+                    customerIntent: extraction.customerIntent,
+                    promiseDate: extraction.promiseDate,
+                    daysDeferred: extraction.daysDeferred,
+                    confidence: extraction.confidence,
+                    summary: extraction.summary,
+                    hinglishReply: extraction.hinglishReply
+                }
+            });
+        }
+        else if (extraction.customerIntent === 'READY_NOW') {
+            await db.insert(auditEvents).values({
+                id: `aud_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                recoveryCaseId: id,
+                eventType: 'CUSTOMER_READY_PAY',
+                metadata: {
+                    customerReply,
+                    summary: extraction.summary,
+                    hinglishReply: extraction.hinglishReply,
+                    paymentLink: `https://pay.recura.ai/checkout/${tx.orderId}`
+                }
+            });
+        }
+        else if (extraction.customerIntent === 'CANCEL_ORDER') {
+            newStatus = RecoveryStatus.STOPPED;
+            await db.update(recoveryCases).set({
+                status: newStatus,
+                updatedAt: new Date()
+            }).where(eq(recoveryCases.id, id));
+            await db.insert(auditEvents).values({
+                id: `aud_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                recoveryCaseId: id,
+                eventType: 'WORKFLOW_STOPPED',
+                metadata: {
+                    reason: 'CUSTOMER_CANCELLED',
+                    customerReply,
+                    summary: extraction.summary
+                }
+            });
+        }
+        const [updated] = await db.select().from(recoveryCases).where(eq(recoveryCases.id, id));
+        res.json({
+            success: true,
+            extraction,
+            recoveryCase: updated
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 // GET /api/audit
 router.get('/audit', async (req, res) => {
     try {

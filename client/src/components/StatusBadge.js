@@ -18,6 +18,9 @@ export const StatusBadge = ({ status }) => {
         case 'VERIFYING':
             badgeStyle = 'bg-[#e0d8ff] text-purple-950 border-purple-300 font-extrabold';
             break;
+        case 'PROMISE_TO_PAY':
+            badgeStyle = 'bg-amber-100 text-amber-950 border-amber-300 font-black shadow-sm';
+            break;
         case 'RETRY_SCHEDULED':
             badgeStyle = 'bg-purple-100 text-purple-800 border-purple-200 font-bold';
             break;

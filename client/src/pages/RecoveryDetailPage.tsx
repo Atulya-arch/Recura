@@ -1,14 +1,31 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { FormatMoney } from '../components/FormatMoney';
 import { StatusBadge } from '../components/StatusBadge';
 import { Timeline } from '../components/Timeline';
 import { fetchApi } from '../api/client';
-import { ArrowLeft, ShieldCheck, Play, StopCircle, Cpu, RefreshCw } from 'lucide-react';
+import {
+  ArrowLeft,
+  ShieldCheck,
+  Play,
+  StopCircle,
+  Cpu,
+  RefreshCw,
+  MessageSquare,
+  Volume2,
+  Calendar,
+  Send,
+  Sparkles,
+  CheckCircle2
+} from 'lucide-react';
 
 export const RecoveryDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const [customerReplyInput, setCustomerReplyInput] = useState('');
+  const [isSubmittingPTP, setIsSubmittingPTP] = useState(false);
+  const [ptpResult, setPtpResult] = useState<any>(null);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
   const { data, isLoading, refetch } = useQuery<any>({
     queryKey: ['recovery-detail', id],
@@ -44,6 +61,51 @@ export const RecoveryDetailPage: React.FC = () => {
     }
   };
 
+  const handlePtpSubmit = async (replyText: string) => {
+    if (!replyText.trim()) return;
+    setIsSubmittingPTP(true);
+    setPtpResult(null);
+
+    try {
+      const res = await fetchApi<any>(`/api/recovery-cases/${id}/hinglish-negotiate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerReply: replyText })
+      });
+
+      setPtpResult(res.extraction);
+      setCustomerReplyInput('');
+      refetch();
+    } catch (err) {
+      console.error('Failed to negotiate PTP:', err);
+    } finally {
+      setIsSubmittingPTP(false);
+    }
+  };
+
+  const playVoiceSimulation = () => {
+    setIsPlayingAudio(true);
+    // Use Web Speech API if available for real audible speech synthesis!
+    if ('speechSynthesis' in window && ai?.hinglishScript) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(ai.hinglishScript);
+      utterance.rate = 0.95;
+      utterance.pitch = 1.05;
+      utterance.onend = () => setIsPlayingAudio(false);
+      utterance.onerror = () => setIsPlayingAudio(false);
+      window.speechSynthesis.speak(utterance);
+    } else {
+      setTimeout(() => setIsPlayingAudio(false), 4000);
+    }
+  };
+
+  const quickPtpOptions = [
+    'Salary 7th ko aayegi, tab auto-retry kar lena',
+    'Kal shaam 5 baje try karo please',
+    'Main abhi instant UPI link se pay kar deta hoon',
+    'Order cancel kar do mujhe nahi chahiye'
+  ];
+
   return (
     <div className="space-y-6">
       {/* Back + Header */}
@@ -59,6 +121,12 @@ export const RecoveryDetailPage: React.FC = () => {
             <div className="flex items-center space-x-3">
               <h1 className="text-2xl font-black text-slate-900 font-mono tracking-tight">Case #{rc.id.slice(0, 12)}…</h1>
               <StatusBadge status={rc.status} />
+              {rc.promiseToPayDate && (
+                <span className="flex items-center space-x-1 px-3 py-0.5 rounded-full text-xs font-black bg-amber-100 text-amber-950 border border-amber-300">
+                  <Calendar className="w-3.5 h-3.5" />
+                  <span>PTP Scheduled: {new Date(rc.promiseToPayDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}</span>
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500 mt-1 font-medium">
               Order <span className="text-slate-900 font-mono font-black">{tx.orderId}</span> • Customer <span className="text-slate-900 font-black">{cust.name}</span>
@@ -120,6 +188,121 @@ export const RecoveryDetailPage: React.FC = () => {
             </div>
           </div>
 
+          {/* STANDOUT FEATURE: Hinglish AI Voice & Promise-to-Pay Negotiator */}
+          <div className="bg-gradient-to-br from-white via-slate-50 to-[#e0d8ff]/30 border border-purple-200 rounded-3xl p-6 shadow-flux-card space-y-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 rounded-2xl bg-[#d4ff32] text-slate-950 shadow-sm">
+                  <Sparkles className="w-5 h-5 text-slate-950" />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h2 className="text-sm font-black text-slate-900 tracking-tight">
+                      Hinglish AI Voice & Promise-to-Pay (PTP) Assistant
+                    </h2>
+                    <span className="text-[9px] font-black px-2 py-0.5 bg-[#161618] text-[#d4ff32] rounded-full uppercase">
+                      NLP Negotiator
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Localized conversational touchpoint & autonomous date extraction for Indian customers.
+                  </p>
+                </div>
+              </div>
+
+              {/* Play Audio Button */}
+              <button
+                onClick={playVoiceSimulation}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-extrabold transition shadow-sm ${
+                  isPlayingAudio
+                    ? 'bg-[#d4ff32] text-slate-950 ring-2 ring-lime-400 animate-pulse'
+                    : 'bg-[#161618] text-white hover:bg-black'
+                }`}
+              >
+                <Volume2 className={`w-3.5 h-3.5 ${isPlayingAudio ? 'animate-bounce' : ''}`} />
+                <span>{isPlayingAudio ? 'Playing Call Audio…' : 'Play Voice Script'}</span>
+              </button>
+            </div>
+
+            {/* Generated Hinglish AI Script Box */}
+            <div className="bg-white border border-purple-200/80 rounded-2xl p-4 space-y-2 shadow-sm">
+              <div className="flex items-center justify-between text-[11px] font-bold text-purple-900">
+                <div className="flex items-center space-x-1.5">
+                  <MessageSquare className="w-3.5 h-3.5 text-purple-700" />
+                  <span>Personalized Hinglish Recovery Script (SMS / WhatsApp / AI Call):</span>
+                </div>
+                <span className="text-[10px] text-slate-400 font-mono">Hindi + English Hybrid</span>
+              </div>
+              <p className="text-xs text-slate-800 font-semibold leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-100 italic">
+                "{ai?.hinglishScript ||
+                  `Namaste ${cust.name} ji! Acme Retail par aapka order #${tx.orderId} hold par hai. Kya hum payment retry aapke salary credit date par schedule karein?`}"
+              </p>
+            </div>
+
+            {/* Interactive Promise-to-Pay Simulator */}
+            <div className="space-y-3 pt-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black text-slate-900">
+                  Simulate Customer Response (Test Natural Language Date Extraction):
+                </span>
+                <span className="text-[10px] text-slate-400 font-medium">Click a preset or type below</span>
+              </div>
+
+              {/* Quick Preset Buttons */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {quickPtpOptions.map((opt, i) => (
+                  <button
+                    key={i}
+                    disabled={isSubmittingPTP}
+                    onClick={() => handlePtpSubmit(opt)}
+                    className="text-left text-[11px] font-bold p-2.5 rounded-xl bg-white border border-slate-200 hover:border-purple-400 hover:bg-[#e0d8ff]/40 text-slate-700 transition duration-150 shadow-sm"
+                  >
+                    💬 "{opt}"
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom Response Input Box */}
+              <div className="flex items-center space-x-2 pt-1">
+                <input
+                  type="text"
+                  value={customerReplyInput}
+                  onChange={(e) => setCustomerReplyInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handlePtpSubmit(customerReplyInput)}
+                  placeholder="Or type custom reply (e.g. 'Bhaiya 10th ko try karna salary aayegi')..."
+                  className="flex-1 bg-white border border-slate-200 rounded-full px-4 py-2 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#d4ff32] shadow-sm"
+                />
+                <button
+                  disabled={isSubmittingPTP || !customerReplyInput.trim()}
+                  onClick={() => handlePtpSubmit(customerReplyInput)}
+                  className="px-4 py-2 bg-[#161618] hover:bg-black text-[#d4ff32] rounded-full text-xs font-black flex items-center space-x-1.5 shadow-sm transition disabled:opacity-40"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{isSubmittingPTP ? 'Extracting…' : 'Send'}</span>
+                </button>
+              </div>
+
+              {/* Real-time Extraction Result Card */}
+              {ptpResult && (
+                <div className="bg-[#d4ff32]/20 border border-lime-400 p-4 rounded-2xl space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="flex items-center justify-between text-xs font-black text-slate-950">
+                    <div className="flex items-center space-x-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-slate-950" />
+                      <span>AI Promise-to-Pay Extracted & Locked!</span>
+                    </div>
+                    <span className="font-mono text-[11px] bg-slate-950 text-[#d4ff32] px-2 py-0.5 rounded-full">
+                      Confidence: {Math.round(ptpResult.confidence * 100)}%
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-900 font-bold">{ptpResult.summary}</p>
+                  <p className="text-[11px] text-slate-700 font-medium bg-white/70 p-2.5 rounded-xl border border-lime-200">
+                    <strong>AI Hinglish Response:</strong> "{ptpResult.hinglishReply}"
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* AI Diagnosis Card */}
           <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-flux-card">
             <div className="flex items-center justify-between mb-4">
@@ -127,7 +310,7 @@ export const RecoveryDetailPage: React.FC = () => {
                 <div className="p-2 rounded-2xl bg-[#e0d8ff] text-purple-900">
                   <Cpu className="w-4 h-4" />
                 </div>
-                <h2 className="text-sm font-black text-slate-900 tracking-tight">AI Diagnosis & Strategy</h2>
+                <h2 className="text-sm font-black text-slate-900 tracking-tight">AI Failure Diagnosis & Strategy</h2>
               </div>
               {ai && (
                 <span className="text-[11px] px-3 py-1 rounded-full bg-[#d4ff32] text-slate-950 font-black">
@@ -189,7 +372,7 @@ export const RecoveryDetailPage: React.FC = () => {
         {/* Right Column: Audit Timeline */}
         <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-flux-card flex flex-col">
           <h2 className="text-sm font-black text-slate-900 mb-4 tracking-tight">Execution Timeline</h2>
-          <div className="flex-1 overflow-y-auto max-h-[580px] pr-1">
+          <div className="flex-1 overflow-y-auto max-h-[640px] pr-1">
             <Timeline events={events} amountMinor={rc.revenueAtRiskMinor} />
           </div>
         </div>

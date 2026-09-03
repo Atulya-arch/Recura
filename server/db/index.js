@@ -103,6 +103,8 @@ export async function initDb() {
     );
 
     ALTER TABLE policies ADD COLUMN IF NOT EXISTS minimum_ai_confidence INTEGER NOT NULL DEFAULT 65;
+    ALTER TABLE recovery_cases ADD COLUMN IF NOT EXISTS promise_to_pay_date TIMESTAMPTZ;
+    ALTER TABLE ai_decisions ADD COLUMN IF NOT EXISTS hinglish_script TEXT;
 
     CREATE INDEX IF NOT EXISTS idx_tx_merchant ON transactions(merchant_id);
     CREATE INDEX IF NOT EXISTS idx_tx_status ON transactions(payment_status);

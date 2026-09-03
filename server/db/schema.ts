@@ -42,6 +42,7 @@ export const recoveryCases = pgTable('recovery_cases', {
   recoveredAmountMinor: integer('recovered_amount_minor').default(0).notNull(),
   currentAttempt: integer('current_attempt').default(0).notNull(),
   maxAttempts: integer('max_attempts').default(3).notNull(),
+  promiseToPayDate: timestamp('promise_to_pay_date', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
@@ -65,8 +66,9 @@ export const aiDecisions = pgTable('ai_decisions', {
   diagnosis: text('diagnosis').notNull(),
   failureCategory: text('failure_category').notNull(),
   recommendedAction: text('recommended_action').notNull(),
-  confidence: integer('confidence').notNull(), // Scaled integer (0-100 or 0-1000) or Float
+  confidence: integer('confidence').notNull(),
   rationale: text('rationale').notNull(),
+  hinglishScript: text('hinglish_script'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 

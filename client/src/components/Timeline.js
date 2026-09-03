@@ -49,6 +49,18 @@ export const Timeline = ({ events, amountMinor }) => {
                     dotBg = 'bg-blue-100 border-blue-300';
                     titleColor = 'text-blue-900';
                     break;
+                case 'PROMISE_REGISTERED':
+                    icon = _jsx(Clock, { className: "w-3.5 h-3.5 text-amber-700" });
+                    title = `Promise-to-Pay Scheduled (${evt.metadata?.promiseDate ? new Date(evt.metadata.promiseDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }) : 'Future'})`;
+                    dotBg = 'bg-amber-100 border-amber-400 shadow-sm';
+                    titleColor = 'text-amber-900 font-black';
+                    break;
+                case 'CUSTOMER_READY_PAY':
+                    icon = _jsx(CheckCircle2, { className: "w-3.5 h-3.5 text-slate-950" });
+                    title = 'Customer Ready: Instant Link Sent';
+                    dotBg = 'bg-[#d4ff32] border-lime-400';
+                    titleColor = 'text-slate-950 font-black';
+                    break;
                 case 'PROVIDER_TIMEOUT':
                     icon = _jsx(Clock, { className: "w-3.5 h-3.5 text-amber-600" });
                     title = 'Gateway Timeout (UNKNOWN)';

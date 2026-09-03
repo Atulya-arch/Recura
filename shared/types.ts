@@ -1,4 +1,4 @@
-import { PaymentStatus, RecoveryStatus, FailureCategory, RecoveryActionType } from './enums.js';
+import { PaymentStatus, RecoveryStatus, FailureCategory, RecoveryActionType, CustomerIntent } from './enums.js';
 
 export interface Merchant {
   id: string;
@@ -42,6 +42,7 @@ export interface RecoveryCase {
   recoveredAmountMinor: number;
   currentAttempt: number;
   maxAttempts: number;
+  promiseToPayDate?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -67,6 +68,7 @@ export interface AIDecision {
   recommendedAction: RecoveryActionType;
   confidence: number;
   rationale: string;
+  hinglishScript?: string;
   createdAt: string;
 }
 

@@ -1,12 +1,21 @@
 import { z } from 'zod';
-import { FailureCategory, RecoveryActionType } from './enums.js';
+import { FailureCategory, RecoveryActionType, CustomerIntent } from './enums.js';
 export const AiDecisionSchema = z.object({
     diagnosis: z.string().min(1),
     failureCategory: z.nativeEnum(FailureCategory),
     recommendedAction: z.nativeEnum(RecoveryActionType),
     confidence: z.number().min(0).max(1),
     rationale: z.string().min(1),
-    customerMessage: z.string().optional()
+    customerMessage: z.string().optional(),
+    hinglishScript: z.string().optional()
+});
+export const PromiseToPayExtractionSchema = z.object({
+    customerIntent: z.nativeEnum(CustomerIntent),
+    promiseDate: z.string().nullable(), // ISO Date string (e.g. 2026-09-07T10:00:00.000Z)
+    daysDeferred: z.number().int().min(0).max(30),
+    confidence: z.number().min(0).max(1),
+    summary: z.string(),
+    hinglishReply: z.string()
 });
 export const UpdatePolicySchema = z.object({
     maxRetries: z.number().int().min(0).max(10).optional(),
