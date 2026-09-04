@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { AiDecisionSchema, AiDecisionInput, PromiseToPayExtraction, PromiseToPayExtractionSchema } from '../../shared/schemas.js';
 import { FailureCategory, RecoveryActionType, CustomerIntent } from '../../shared/enums.js';
 import { Transaction, Customer } from '../../shared/types.js';
+import { GeminiCircuitBreaker } from './geminiCircuitBreaker.js';
 
 export interface CustomerHistory {
   previousSuccessfulPayments: number;
@@ -10,7 +11,7 @@ export interface CustomerHistory {
 }
 
 // Supported modern Gemini model
-const PRIMARY_GEMINI_MODEL = 'gemini-3.6-flash';
+export const PRIMARY_GEMINI_MODEL = 'gemini-3.6-flash';
 
 /**
  * Wraps a promise with a fast strict timeout so the application never hangs.
@@ -23,17 +24,9 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs = 2000): Promise<T> {
   return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
 }
 
-/**
- * Sanitizes error messages to guarantee no API keys or sensitive credentials are ever logged.
- */
-function sanitizeErrorMessage(error: any): string {
-  if (!error) return 'Unknown error';
-  const msg = typeof error.message === 'string' ? error.message : String(error);
-  return msg.replace(/key=[a-zA-Z0-9_\-]+/gi, 'key=[REDACTED]').replace(/AIza[0-9A-Za-z-_]{35}/g, '[REDACTED_API_KEY]');
-}
-
 export class AIRecoveryService {
   private aiClient?: GoogleGenerativeAI;
+  private circuitBreaker = GeminiCircuitBreaker.getInstance();
 
   constructor(disableCloudApi = false) {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -66,15 +59,11 @@ export class AIRecoveryService {
       allowedCategories: Object.values(FailureCategory)
     };
 
-    // If Gemini API client is initialized, attempt fast LLM call (max 2 seconds)
-    if (this.aiClient) {
-      try {
-        const model = this.aiClient.getGenerativeModel({
-          model: PRIMARY_GEMINI_MODEL,
-          generationConfig: { responseMimeType: 'application/json' }
-        });
+    const heuristicFallback = () => this.runHeuristicAnalysis(transaction, customer, history);
 
-        const prompt = `You are Recura's AI Revenue Recovery agent. Analyze the following failed payment/checkout transaction context and return ONLY a valid JSON object matching the required schema.
+    // If Gemini client is active, execute through Circuit Breaker with quota protection
+    if (this.aiClient) {
+      const prompt = `You are Recura's AI Revenue Recovery agent. Analyze the following failed payment/checkout transaction context and return ONLY a valid JSON object matching the required schema.
 
 Input Context:
 ${JSON.stringify(promptContext, null, 2)}
@@ -90,24 +79,30 @@ Requirements:
 
 Return ONLY raw JSON.`;
 
-        const response = await withTimeout(model.generateContent(prompt), 2000);
-        const rawText = response.response.text() || '';
-        const cleanedJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-        const parsed = JSON.parse(cleanedJson);
-        const validated = AiDecisionSchema.safeParse(parsed);
+      const execution = await this.circuitBreaker.execute(
+        async () => {
+          const model = this.aiClient!.getGenerativeModel({
+            model: PRIMARY_GEMINI_MODEL,
+            generationConfig: { responseMimeType: 'application/json' }
+          });
+          const response = await withTimeout(model.generateContent(prompt), 2000);
+          const rawText = response.response.text() || '';
+          const cleanedJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+          const parsed = JSON.parse(cleanedJson);
+          const validated = AiDecisionSchema.safeParse(parsed);
+          if (!validated.success) {
+            throw new Error(`Zod validation failed: ${validated.error.message}`);
+          }
+          return validated.data;
+        },
+        heuristicFallback
+      );
 
-        if (validated.success) {
-          return { decision: validated.data, aiFailed: false };
-        }
-      } catch (err: any) {
-        const safeMsg = sanitizeErrorMessage(err);
-        console.warn(`[AI] Cloud LLM latency/quota fallback (${safeMsg}). Switched to instant local deterministic heuristic.`);
-      }
+      return { decision: execution.result, aiFailed: false };
     }
 
     // Instant High-Precision Local Heuristic Engine (< 1 millisecond)
-    const heuristicDecision = this.runHeuristicAnalysis(transaction, customer, history);
-    return { decision: heuristicDecision, aiFailed: false };
+    return { decision: heuristicFallback(), aiFailed: false };
   }
 
   /**
@@ -121,16 +116,11 @@ Return ONLY raw JSON.`;
     baseDate: Date = new Date()
   ): Promise<PromiseToPayExtraction> {
     const text = customerReply.trim().toLowerCase();
+    const heuristicFallback = () => this.parsePTPHeuristic(text, customerName, amountFormatted, baseDate);
 
-    // If Gemini client is active, attempt fast LLM parsing (max 2 seconds)
+    // If Gemini client is active, execute through Circuit Breaker with quota protection
     if (this.aiClient) {
-      try {
-        const model = this.aiClient.getGenerativeModel({
-          model: PRIMARY_GEMINI_MODEL,
-          generationConfig: { responseMimeType: 'application/json' }
-        });
-
-        const prompt = `You are Recura's Promise-to-Pay (PTP) NLP parser for Indian merchant checkout recovery.
+      const prompt = `You are Recura's Promise-to-Pay (PTP) NLP parser for Indian merchant checkout recovery.
 Base Today Date: ${baseDate.toISOString()}
 Customer Reply: "${customerReply}"
 
@@ -146,21 +136,29 @@ Schema Requirements:
 
 Return ONLY raw JSON.`;
 
-        const res = await withTimeout(model.generateContent(prompt), 2000);
-        const raw = res.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
-        const parsed = JSON.parse(raw);
-        const validated = PromiseToPayExtractionSchema.safeParse(parsed);
-        if (validated.success) {
+      const execution = await this.circuitBreaker.execute(
+        async () => {
+          const model = this.aiClient!.getGenerativeModel({
+            model: PRIMARY_GEMINI_MODEL,
+            generationConfig: { responseMimeType: 'application/json' }
+          });
+          const res = await withTimeout(model.generateContent(prompt), 2000);
+          const raw = res.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+          const parsed = JSON.parse(raw);
+          const validated = PromiseToPayExtractionSchema.safeParse(parsed);
+          if (!validated.success) {
+            throw new Error(`PTP schema validation failed: ${validated.error.message}`);
+          }
           return validated.data;
-        }
-      } catch (err: any) {
-        const safeMsg = sanitizeErrorMessage(err);
-        console.warn(`[AI] Cloud PTP latency fallback: ${safeMsg}`);
-      }
+        },
+        heuristicFallback
+      );
+
+      return execution.result;
     }
 
     // Instant High-Precision Deterministic Hinglish/English PTP Parser (< 1 millisecond)
-    return this.parsePTPHeuristic(text, customerName, amountFormatted, baseDate);
+    return heuristicFallback();
   }
 
   private parsePTPHeuristic(
